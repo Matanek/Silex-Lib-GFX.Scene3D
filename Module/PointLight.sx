@@ -1,0 +1,28 @@
+use GFX.Color
+use GFX.Scene3D.Shadow as Shadow
+
+public struct PointLight {
+    var color:Color
+    var intensity:float
+    var radius:float
+    var softness:float
+    var falloff:float
+    var shadow:Shadow
+    var enabled:bool
+
+    init(
+        color:Color = Color.white(),
+        intensity:float = 1.0,
+        radius:float = 1.0,
+        shadow:Shadow = Shadow(),
+        enabled:bool = true
+    ) {
+        self.color = color
+        self.intensity = intensity
+        self.radius = radius
+        self.softness = 0.25
+        self.falloff = 1.0
+        self.shadow = shadow
+        self.enabled = enabled
+    }
+}

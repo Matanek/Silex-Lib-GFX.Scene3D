@@ -1,0 +1,49 @@
+use GFX.Color
+use GFX.Application
+use GFX.Application.Plugin as PluginProtocol
+use GFX.Scene3D.Plugin as ScenePlugin
+use GFX.Scene3D.Renderer
+
+public struct Grid:PluginProtocol {
+    var spacing:float
+    var major_every:int
+    var line_width:float
+    var axis_width:float
+    var fade_distance:float
+    var minor_color:Color
+    var major_color:Color
+    var x_axis_color:Color
+    var z_axis_color:Color
+
+    init(
+        spacing:float = 1.0,
+        major_every:int = 10,
+        line_width:float = 1.0,
+        axis_width:float = 1.5,
+        fade_distance:float = 120.0
+    ) {
+        if spacing <= 0.0 || major_every < 2 || line_width <= 0.0 ||
+            axis_width <= 0.0 || fade_distance <= 0.0
+        {
+            panic("GFX.Scene3D grid requires positive spacing, widths, and fade distance")
+        }
+        self.spacing = spacing
+        self.major_every = major_every
+        self.line_width = line_width
+        self.axis_width = axis_width
+        self.fade_distance = fade_distance
+        self.minor_color = Color(r:0.40, g:0.45, b:0.52, a:0.22)
+        self.major_color = Color(r:0.52, g:0.58, b:0.66, a:0.42)
+        self.x_axis_color = Color(r:0.90, g:0.30, b:0.28, a:0.90)
+        self.z_axis_color = Color(r:0.28, g:0.48, b:0.92, a:0.90)
+    }
+
+    func id() str { return "GFX.Scene3D.Grid" }
+
+    func build(application:&Application) {
+        application.add_plugin(ScenePlugin())
+        var resources = application.resources()
+        var renderer = resources.get_mut<Renderer>()
+        renderer.set_grid(self)
+    }
+}

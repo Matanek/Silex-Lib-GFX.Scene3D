@@ -1,0 +1,82 @@
+use STD.Math
+use GFX.Scene3D.Transform as Transform
+
+public struct Camera {
+    var active:bool
+    var vertical_fov:float
+    var near_plane:float
+    var far_plane:float
+    var order:int
+    private var orthographic_height:float
+
+    init(
+        active:bool = true,
+        vertical_fov:float = 1.04719758,
+        near_plane:float = 0.1,
+        far_plane:float = 1000.0,
+        order:int = 0
+    ) {
+        self.active = active
+        self.vertical_fov = vertical_fov
+        self.near_plane = near_plane
+        self.far_plane = far_plane
+        self.order = order
+        self.orthographic_height = 0.0
+    }
+
+    func view(transform:@Transform) Math.Mat4 {
+        return transform.view_matrix()
+    }
+
+    func is_active() bool { return self.active }
+
+    func render_order() int { return self.order }
+
+    func use_perspective() { self.orthographic_height = 0.0 }
+
+    func use_orthographic(height:float) {
+        if height <= 0.0 { panic("GFX.Camera orthographic height must be positive") }
+        self.orthographic_height = height
+    }
+
+    func is_orthographic() bool { return self.orthographic_height > 0.0 }
+
+    func projection(aspect_ratio:float) Math.Mat4 {
+        var aspect = aspect_ratio
+        if aspect <= 0.0 { aspect = 1.0 }
+        var fov = self.vertical_fov
+        if fov <= 0.0 || fov >= Math.pi() { fov = 1.04719758 }
+        var near = self.near_plane
+        if near <= 0.0 { near = 0.001 }
+        var far = self.far_plane
+        if far <= near { far = near + 1000.0 }
+        if self.orthographic_height > 0.0 {
+            let half_height = self.orthographic_height * 0.5
+            let half_width = half_height * aspect
+            return Math.Mat4.orthographic(
+                -half_width,
+                half_width,
+                -half_height,
+                half_height,
+                near,
+                far
+            )
+        }
+        return Math.Mat4.perspective(fov, aspect, near, far)
+    }
+
+    func project(point:Math.Vec3, transform:@Transform, viewport:Math.Vec2) Math.Vec2? {
+        if viewport.x <= 0.0 || viewport.y <= 0.0 { return null }
+        let clip = self.projection(viewport.x / viewport.y)
+            .multiply(self.view(transform))
+            .multiply(Math.Vec4(point, 1.0))
+        if clip.w <= 0.0 { return null }
+        let inverse_w = 1.0 / clip.w
+        let normalized_x = clip.x * inverse_w
+        let normalized_y = clip.y * inverse_w
+        return Math.Vec2(
+            (normalized_x + 1.0) * 0.5 * viewport.x,
+            (1.0 - normalized_y) * 0.5 * viewport.y
+        )
+    }
+}

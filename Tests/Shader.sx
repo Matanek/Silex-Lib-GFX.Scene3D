@@ -1,0 +1,13 @@
+use GFX.GPU
+
+test "compile the built-in Scene3D forward shader" {
+    let program = GPU.ShaderProgram.hlsl(
+        file:"../Shaders/Forward.hlsl"
+    )
+}
+
+test "compile the built-in Scene3D skybox shader" {
+    let program = GPU.ShaderProgram.hlsl(
+        file:"../Shaders/Skybox.hlsl"
+    )
+}

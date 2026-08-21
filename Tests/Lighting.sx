@@ -1,0 +1,39 @@
+use GFX.Color
+use GFX.Scene3D
+use STD.Math
+
+test "keep shadows and gizmos in the public Scene3D lighting vocabulary" {
+    let shadow = Scene3D.Shadow(bias:0.00085, normal_offset:0.003, softness:0.5)
+    var sun = Scene3D.SunLight(
+        direction:Math.Vec3(-0.45, -1.0, -0.3),
+        intensity:1.35,
+        shadow:shadow
+    )
+    sun.shadow_distance = 45.0
+    sun.shadow_cascade_distances = Math.Vec4(30.0, 36.0, 41.0, 45.0)
+    let point = Scene3D.PointLight(
+        color:Color.sky_400(),
+        intensity:2.2,
+        radius:2.4,
+        shadow:shadow
+    )
+    let gizmo = Scene3D.PointLightGizmo()
+
+    assert(sun.shadow.enabled)
+    assert(sun.shadow_cascade_distances.x == 30.0)
+    assert(sun.shadow_cascade_distances.w == sun.shadow_distance)
+    assert(point.shadow.softness == 0.5)
+    assert(gizmo.visible)
+    assert(gizmo.show_radius)
+}
+
+test "keep default projected shadows attached to contact edges" {
+    let sun = Scene3D.Shadow.sun()
+    let projector = Scene3D.Shadow.projector()
+
+    assert(sun.bias == 0.00045)
+    assert(sun.normal_offset == 0.0005)
+    assert(sun.softness == 0.65)
+    assert(projector.bias == 0.00045)
+    assert(projector.normal_offset == 0.0005)
+}

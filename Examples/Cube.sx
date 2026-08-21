@@ -1,0 +1,77 @@
+use GFX.Application
+use GFX.Color
+use GFX.Components
+use GFX.ECS
+use GFX.Plugins
+use GFX.Resources
+use GFX.Scene3D
+use STD.Math
+
+func create_scene(world:&Resources.World, meshes:&Resources.Meshes3D) {
+    let cube = meshes.add(Scene3D.Geometry.Cube.make(Math.Vec3(2.0)))
+
+    world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D(position:Math.Vec3(0.0, 0.0, 5.0)))
+        ..with(Components.Camera3D(vertical_fov:Math.radians(55.0)))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D())
+        ..with(Components.Mesh3D(cube))
+        ..with(Components.Material3D(
+            albedo:Color.indigo_400(),
+            metallic:0.15,
+            roughness:0.28
+        ))
+        ..with(Components.Rotator3D(x_speed:0.25, y_speed:0.55, z_speed:0.1))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Components.AmbientLight3D(
+            color:Color.sky_200(),
+            intensity:0.12
+        ))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Components.SunLight3D(
+            direction:Math.Vec3(-0.45, -1.0, -0.35),
+            color:Color.white(),
+            intensity:3.0
+        ))
+    )
+}
+
+func rotate(
+    time:@Resources.FrameTime,
+    query:ECS.Query<(&Components.Transform3D, @Components.Rotator3D)>
+) {
+    for (transform, rotator) in query {
+        let pitch = Math.Quat.angle_axis(
+            rotator.x_speed * time.delta,
+            Math.Vec3.right()
+        )
+        let yaw = Math.Quat.angle_axis(
+            rotator.y_speed * time.delta,
+            Math.Vec3.up()
+        )
+        let roll = Math.Quat.angle_axis(
+            rotator.z_speed * time.delta,
+            Math.Vec3.front()
+        )
+        transform.rotation = yaw.multiply(pitch).multiply(roll)
+            .multiply(transform.rotation)
+            .normalized()
+    }
+}
+
+func main() {
+    Application()
+        ..add_plugin(Plugins.Window(Plugins.Window.Settings()
+            ..title = "Scene3D — Cube"
+            ..width = 960
+            ..height = 640
+        ))
+        ..add_plugin(Plugins.Time())
+        ..add_plugin(Plugins.Scene3D())
+        ..add_system(Application.Schedule.startup, create_scene)
+        ..add_system(Application.Schedule.update, rotate)
+        ..run()
+}

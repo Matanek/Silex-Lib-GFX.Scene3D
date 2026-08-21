@@ -1,0 +1,243 @@
+use GFX.Application
+use GFX.Color
+use GFX.Components
+use GFX.ECS
+use GFX.Input
+use GFX.Plugins
+use GFX.Resources
+use GFX.Scene3D
+use STD.Math
+
+enum Preset {
+    sun
+    spot
+    cube
+    tube
+    point
+}
+
+struct State {
+    var sun:ECS.Entity
+    var spot:ECS.Entity
+    var cube:ECS.Entity
+    var tube:ECS.Entity
+    var point:ECS.Entity
+    var active:Preset
+}
+
+func create_geometry(world:&Resources.World, meshes:&Resources.Meshes3D) {
+    let ground = meshes.add(
+        Scene3D.Geometry.Cube.make().translated(Math.Vec3(0.0, -0.5, 0.0))
+    )
+    let cube = meshes.add(
+        Scene3D.Geometry.Cube.make().translated(Math.Vec3(0.0, 0.5, 0.0))
+    )
+
+    world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D(scale:Math.Vec3(4.0, 0.3, 4.0)))
+        ..with(Components.Mesh3D(ground))
+        ..with(Components.Material3D(
+            albedo:Color.bytes(125, 127, 118),
+            roughness:0.82
+        ))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D(rotation:Math.Quat.angle_axis(
+            Math.radians(22.0),
+            Math.Vec3.up()
+        )))
+        ..with(Components.Mesh3D(cube))
+        ..with(Components.Material3D(
+            albedo:Color.bytes(218, 214, 196),
+            metallic:0.1,
+            roughness:0.34
+        ))
+        ..with(Components.Rotator3D(x_speed:0.0, y_speed:0.45, z_speed:0.0))
+    )
+}
+
+func create_lights(world:&Resources.World, state:&State) {
+    world.spawn(ECS.EntityRecipe()
+        ..with(Components.AmbientLight3D(
+            color:Color.white(),
+            intensity:0.06
+        ))
+    )
+
+    state.sun = world.spawn(ECS.EntityRecipe()
+        ..with(Components.SunLight3D(
+            direction:Math.Vec3(-0.45, -0.9, -0.35).normalized(),
+            color:Color.white(),
+            intensity:5.0
+        ))
+        ..with(Components.SunLightGizmo3D())
+    )
+
+    let position = Math.Vec3(0.0, 3.0, 3.2)
+    let direction = Math.Vec3(0.0, 0.25, 0.0)
+        .subtract(position)
+        .normalized()
+
+    state.spot = world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D(position:position))
+        ..with(Components.SpotProjectorLight3D(
+            direction:direction,
+            color:Color.white(),
+            intensity:7.0,
+            reach:2.2,
+            angle:Math.radians(15.0),
+            enabled:false
+        )
+            ..softness = Math.radians(7.0)
+            ..falloff = 1.7
+        )
+        ..with(Components.SpotProjectorLightGizmo3D())
+    )
+    state.cube = world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D(position:position))
+        ..with(Components.CubeProjectorLight3D(
+            direction:direction,
+            color:Color.white(),
+            intensity:7.0,
+            size:Math.Vec3(3.0, 3.0, 2.2),
+            enabled:false
+        )
+            ..softness = 0.8
+            ..falloff = 1.7
+        )
+        ..with(Components.CubeProjectorLightGizmo3D())
+    )
+    state.tube = world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D(position:position))
+        ..with(Components.TubeProjectorLight3D(
+            direction:direction,
+            color:Color.white(),
+            intensity:7.0,
+            length:2.2,
+            radius:1.5,
+            enabled:false
+        )
+            ..softness = 0.8
+            ..falloff = 1.7
+        )
+        ..with(Components.TubeProjectorLightGizmo3D())
+    )
+    state.point = world.spawn(ECS.EntityRecipe()
+        ..with(Components.Transform3D(position:Math.Vec3(1.3, 1.4, 1.6)))
+        ..with(Components.PointLight3D(
+            color:Color.white(),
+            intensity:5.0,
+            radius:1.8,
+            enabled:false
+        )
+            ..softness = 0.8
+            ..falloff = 1.4
+        )
+        ..with(Components.PointLightGizmo3D())
+    )
+}
+
+func preset_name(value:Preset) str {
+    if value == Preset.sun { return "1 SunLight" }
+    if value == Preset.spot { return "2 SpotProjectorLight" }
+    if value == Preset.cube { return "3 CubeProjectorLight" }
+    if value == Preset.tube { return "4 TubeProjectorLight" }
+    return "5 PointLight"
+}
+
+func apply_preset(
+    world:&Resources.World,
+    state:&State,
+    window:&Resources.Window,
+    preset:Preset
+) {
+    state.active = preset
+    world.update<Components.SunLight3D>(state.sun, func(light:&Components.SunLight3D) {
+        light.enabled = preset == Preset.sun
+    })
+    world.update<Components.SpotProjectorLight3D>(
+        state.spot,
+        func(light:&Components.SpotProjectorLight3D) {
+            light.enabled = preset == Preset.spot
+        }
+    )
+    world.update<Components.CubeProjectorLight3D>(
+        state.cube,
+        func(light:&Components.CubeProjectorLight3D) {
+            light.enabled = preset == Preset.cube
+        }
+    )
+    world.update<Components.TubeProjectorLight3D>(
+        state.tube,
+        func(light:&Components.TubeProjectorLight3D) {
+            light.enabled = preset == Preset.tube
+        }
+    )
+    world.update<Components.PointLight3D>(state.point, func(light:&Components.PointLight3D) {
+        light.enabled = preset == Preset.point
+    })
+    window.set_title("Scene3D — Lighting — " + preset_name(preset))
+}
+
+func activate_default(world:&Resources.World, state:&State, window:&Resources.Window) {
+    apply_preset(world, state, window, state.active)
+}
+
+func select_light(
+    input:@Resources.InputState,
+    world:&Resources.World,
+    state:&State,
+    window:&Resources.Window
+) {
+    if input.is_pressed(Input.Key.num1) { apply_preset(world, state, window, Preset.sun) }
+    if input.is_pressed(Input.Key.num2) { apply_preset(world, state, window, Preset.spot) }
+    if input.is_pressed(Input.Key.num3) { apply_preset(world, state, window, Preset.cube) }
+    if input.is_pressed(Input.Key.num4) { apply_preset(world, state, window, Preset.tube) }
+    if input.is_pressed(Input.Key.num5) { apply_preset(world, state, window, Preset.point) }
+}
+
+func rotate(
+    time:@Resources.FrameTime,
+    query:ECS.Query<(&Components.Transform3D, @Components.Rotator3D)>
+) {
+    for (transform, rotator) in query {
+        transform.rotation = Math.Quat.angle_axis(
+            rotator.y_speed * time.delta,
+            Math.Vec3.up()
+        ).multiply(transform.rotation).normalized()
+    }
+}
+
+func main() {
+    Application()
+        ..add_resource(State(
+            sun:ECS.Entity(),
+            spot:ECS.Entity(),
+            cube:ECS.Entity(),
+            tube:ECS.Entity(),
+            point:ECS.Entity(),
+            active:Preset.sun
+        ))
+        ..add_plugin(Plugins.Window(Plugins.Window.Settings()
+            ..title = "Scene3D — Lighting — 1 SunLight"
+            ..width = 1280
+            ..height = 720
+        ))
+        ..add_plugin(Plugins.Time())
+        ..add_plugin(Plugins.ViewportCamera3D(Plugins.ViewportCamera3D.Settings()
+            ..target = Math.Vec3(0.0, 0.55, 0.0)
+            ..distance = 5.0
+            ..min_distance = 2.0
+            ..max_distance = 12.0
+            ..pitch = Math.radians(-18.0)
+            ..vertical_fov = Math.radians(42.0)
+            ..near_plane = 0.05
+            ..far_plane = 80.0
+        ))
+        ..add_system(Application.Schedule.startup, create_geometry)
+        ..add_system(Application.Schedule.startup, create_lights)
+        ..add_after_system(Application.Schedule.startup, activate_default)
+        ..add_system(Application.Schedule.pre_update, select_light)
+        ..add_system(Application.Schedule.update, rotate)
+        ..run()
+}

@@ -1,0 +1,196 @@
+use GFX.Color
+use STD.Math
+
+enum ProceduralStyle:int {
+    day = 0
+    golden_hour = 1
+    sunset = 2
+}
+
+public struct ProceduralSky {
+    private let style:ProceduralStyle
+    var sky_intensity:float
+    var sun_intensity:float
+    var sun_direction:Math.Vec3
+
+    module init() {
+        self.style = ProceduralStyle.day
+        self.sky_intensity = 1.0
+        self.sun_intensity = 3.2
+        self.sun_direction = Math.Vec3(0.25, 0.75, -0.4)
+    }
+
+    private init(style:ProceduralStyle) {
+        self.style = style
+        self.sky_intensity = 1.0
+        self.sun_intensity = 3.2
+        self.sun_direction = Math.Vec3(0.25, 0.75, -0.4)
+        if style == ProceduralStyle.golden_hour {
+            self.sky_intensity = 0.95
+            self.sun_intensity = 2.8
+            self.sun_direction = Math.Vec3(0.05, 0.16, -1.0)
+        }
+        if style == ProceduralStyle.sunset {
+            self.sky_intensity = 0.82
+            self.sun_intensity = 2.8
+            self.sun_direction = Math.Vec3(0.0, 0.08, -1.0)
+        }
+    }
+
+    static func day() ProceduralSky { return ProceduralSky() }
+    static func golden_hour() ProceduralSky {
+        return ProceduralSky(ProceduralStyle.golden_hour)
+    }
+    static func sunset() ProceduralSky {
+        return ProceduralSky(ProceduralStyle.sunset)
+    }
+
+    module func day_zenith() Color {
+        return match self.style {
+            golden_hour => Color.bytes(81, 123, 146)
+            sunset => Color.bytes(185, 156, 169)
+            else => Color.bytes(34, 119, 218)
+        }
+    }
+
+    module func day_horizon() Color {
+        return match self.style {
+            golden_hour => Color.bytes(250, 186, 105)
+            sunset => Color.bytes(255, 165, 91)
+            else => Color.bytes(149, 202, 238)
+        }
+    }
+
+    module func night_zenith() Color { return Color.bytes(4, 9, 25) }
+    module func night_horizon() Color { return Color.bytes(22, 36, 86) }
+
+    module func sun_color() Color {
+        return match self.style {
+            golden_hour => Color.bytes(255, 231, 178)
+            sunset => Color.bytes(255, 234, 205)
+            else => Color.bytes(255, 249, 230)
+        }
+    }
+
+    module func horizon_glow_color() Color {
+        return match self.style {
+            golden_hour => Color.bytes(255, 169, 74)
+            sunset => Color.bytes(255, 126, 49)
+            else => Color.bytes(255, 188, 112)
+        }
+    }
+
+    module func sun_angular_radius() float {
+        return match self.style {
+            golden_hour => Math.radians(0.32)
+            sunset => Math.radians(0.34)
+            else => Math.radians(0.28)
+        }
+    }
+
+    module func sun_softness() float {
+        if self.style == ProceduralStyle.day { return Math.radians(0.05) }
+        return Math.radians(0.06)
+    }
+
+    module func sun_halo_intensity() float {
+        return match self.style { golden_hour => 0.38; sunset => 0.45; else => 0.32 }
+    }
+
+    module func sun_halo_angular_radius() float {
+        return match self.style {
+            golden_hour => Math.radians(1.3)
+            sunset => Math.radians(1.5)
+            else => Math.radians(1.0)
+        }
+    }
+
+    module func sun_halo_softness() float {
+        return match self.style {
+            golden_hour => Math.radians(2.8)
+            sunset => Math.radians(3.2)
+            else => Math.radians(2.0)
+        }
+    }
+
+    module func sun_glow_intensity() float {
+        return match self.style { golden_hour => 0.28; sunset => 0.36; else => 0.08 }
+    }
+
+    module func sun_glow_angular_radius() float {
+        return match self.style {
+            golden_hour => Math.radians(6.0)
+            sunset => Math.radians(7.0)
+            else => Math.radians(5.0)
+        }
+    }
+
+    module func sun_glow_softness() float {
+        return match self.style {
+            golden_hour => Math.radians(10.0)
+            sunset => Math.radians(12.0)
+            else => Math.radians(8.0)
+        }
+    }
+
+    module func horizon_glow_intensity() float {
+        return match self.style { golden_hour => 0.48; sunset => 0.58; else => 0.0 }
+    }
+
+    module func horizon_glow_height() float {
+        return match self.style { golden_hour => 0.32; sunset => 0.34; else => 0.24 }
+    }
+
+    module func horizon_glow_falloff() float {
+        return match self.style { golden_hour => 1.7; sunset => 1.6; else => 1.8 }
+    }
+}
+
+enum Source:int {
+    none = 0
+    procedural = 1
+}
+
+// The sky visible behind a scene and used by its indirect PBR lighting. A
+// procedural sky is one source; image-based sources can be added independently.
+public struct Skybox {
+    private let source:Source
+    private let procedural_sky:ProceduralSky
+    var enabled:bool
+    var visible:bool
+    var diffuse_intensity:float
+    var specular_intensity:float
+
+    module init() {
+        self.source = Source.none
+        self.procedural_sky = ProceduralSky.day()
+        self.enabled = false
+        self.visible = false
+        self.diffuse_intensity = 0.0
+        self.specular_intensity = 0.0
+    }
+
+    private init(source:Source, sky:ProceduralSky) {
+        self.source = source
+        self.procedural_sky = sky
+        self.enabled = source != Source.none
+        self.visible = source != Source.none
+        self.diffuse_intensity = 0.35
+        self.specular_intensity = 1.0
+        if source == Source.none {
+            self.diffuse_intensity = 0.0
+            self.specular_intensity = 0.0
+        }
+    }
+
+    static func none() Skybox {
+        return Skybox()
+    }
+
+    static func procedural(sky:ProceduralSky) Skybox {
+        return Skybox(Source.procedural, sky)
+    }
+
+    module func sky() ProceduralSky { return self.procedural_sky }
+    module func is_procedural() bool { return self.source == Source.procedural }
+}

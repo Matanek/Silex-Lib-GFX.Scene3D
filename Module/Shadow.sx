@@ -1,0 +1,34 @@
+public struct Shadow {
+    var enabled:bool
+    var near_plane:float
+    var bias:float
+    var normal_offset:float
+    var softness:float
+
+    init(
+        enabled:bool = true,
+        near_plane:float = 0.05,
+        bias:float = 0.0006,
+        normal_offset:float = 0.00005,
+        softness:float = 0.0
+    ) {
+        self.enabled = enabled
+        self.near_plane = near_plane
+        self.bias = bias
+        self.normal_offset = normal_offset
+        self.softness = softness
+    }
+
+    static func sun() Shadow {
+        return Shadow(
+            near_plane:0.1,
+            bias:0.00045,
+            normal_offset:0.0005,
+            softness:0.65
+        )
+    }
+
+    static func projector() Shadow {
+        return Shadow(near_plane:0.05, bias:0.00045, normal_offset:0.0005)
+    }
+}

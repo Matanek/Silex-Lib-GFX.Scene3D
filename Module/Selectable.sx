@@ -1,0 +1,26 @@
+use GFX.Color
+use STD.Math
+
+// Opts an entity into viewport selection. Selection itself is application
+// state; this component only carries the entity-local participation contract.
+public struct Selectable {
+    var enabled:bool
+    var screen_radius:float
+    module var selected:bool
+    module var outline:Color
+
+    init(enabled:bool = true, screen_radius:float = 14.0) {
+        self.enabled = enabled
+        self.screen_radius = screen_radius
+        self.selected = false
+        self.outline = Color.amber_400()
+    }
+
+    func is_selected() bool { return self.selected }
+    func point_radius() float { return Math.max(0.0, self.screen_radius) }
+    func set_selected(value:bool, color:Color) {
+        self.selected = value
+        self.outline = color
+    }
+    func outline_color() Color { return self.outline }
+}

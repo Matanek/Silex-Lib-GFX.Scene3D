@@ -1,0 +1,60 @@
+use GFX.Scene3D.Transform
+use STD.Math
+
+static class InstanceIdentities {
+    private var next:int
+
+    func make() int {
+        InstanceIdentities.next++
+        return InstanceIdentities.next
+    }
+}
+
+public struct Instances {
+    private let current_identity:int
+    private var current_transforms:Transform[]
+    private var current_matrices:Math.Mat4[]
+    private var current_revision:int
+
+    init(transforms:Transform[] = []) {
+        self.current_identity = InstanceIdentities.make()
+        self.current_transforms = transforms
+        self.current_matrices = instance_matrices(self.current_transforms)
+        self.current_revision = 1
+    }
+
+    func count() int { return self.current_transforms.count() }
+    func transforms() @Transform[..] {
+        return @self.current_transforms[0:self.current_transforms.count()]
+    }
+    package func matrices() @Math.Mat4[..] {
+        return @self.current_matrices[0:self.current_matrices.count()]
+    }
+    package func identity() int { return self.current_identity }
+    func revision() int { return self.current_revision }
+
+    func replace(transforms:Transform[]) {
+        self.current_transforms = transforms
+        self.current_matrices = instance_matrices(self.current_transforms)
+        self.current_revision++
+    }
+
+    func append(transform:Transform) {
+        self.current_transforms.append(transform)
+        self.current_matrices.append(transform.matrix())
+        self.current_revision++
+    }
+
+    func clear() {
+        if self.current_transforms.count() == 0 { return }
+        self.current_transforms.clear()
+        self.current_matrices.clear()
+        self.current_revision++
+    }
+}
+
+func instance_matrices(transforms:@Transform[]) Math.Mat4[] {
+    var matrices:Math.Mat4[] = []
+    for transform in transforms { matrices.append(transform.matrix()) }
+    return matrices
+}

@@ -1,0 +1,37 @@
+use GFX.Color
+use GFX.Scene3D.Shadow as Shadow
+use STD.Math
+
+public struct TubeProjectorLight {
+    var direction:Math.Vec3
+    var color:Color
+    var intensity:float
+    var length:float
+    var radius:float
+    var softness:float
+    var falloff:float
+    var shadow_caster_distance:float
+    var shadow:Shadow
+    var enabled:bool
+
+    init(
+        direction:Math.Vec3 = Math.Vec3(-0.4, -1.0, -0.3),
+        color:Color = Color.white(),
+        intensity:float = 1.0,
+        length:float = 4.0,
+        radius:float = 1.0,
+        shadow:Shadow = Shadow.projector(),
+        enabled:bool = true
+    ) {
+        self.direction = direction
+        self.color = color
+        self.intensity = intensity
+        self.length = length
+        self.radius = radius
+        self.softness = 0.25
+        self.falloff = 1.0
+        self.shadow_caster_distance = 4.0
+        self.shadow = shadow
+        self.enabled = enabled
+    }
+}

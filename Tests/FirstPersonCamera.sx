@@ -1,0 +1,39 @@
+use GFX.Application
+use GFX.Plugins
+use GFX.Resources
+use STD.Math
+
+test "walk a first-person camera on its horizontal plane" {
+    var application = Application()
+        ..add_plugin(Plugins.FirstPersonCamera3D(Plugins.FirstPersonCamera3D.Settings()
+            ..position = Math.Vec3(0.0, 1.7, 0.0)
+            ..move_speed = 4.0
+            ..sprint_multiplier = 2.0
+        ))
+        ..prepare()
+    var resources = application.resources()
+    var controller = resources.get_mut<Resources.FirstPersonCamera3D>()
+
+    controller.walk(1.0, 0.0, false, 0.5)
+    assert(controller.position().nearly_equal(Math.Vec3(0.0, 1.7, -2.0)))
+
+    controller.walk(0.0, 1.0, true, 0.25)
+    assert(controller.position().nearly_equal(Math.Vec3(2.0, 1.7, -2.0)))
+}
+
+test "turn a captured first-person camera with clamped pitch" {
+    var application = Application()
+        ..add_plugin(Plugins.FirstPersonCamera3D(Plugins.FirstPersonCamera3D.Settings()
+            ..look_sensitivity = 0.01
+            ..min_pitch = -0.5
+            ..max_pitch = 0.5
+        ))
+        ..prepare()
+    var resources = application.resources()
+    var controller = resources.get_mut<Resources.FirstPersonCamera3D>()
+
+    controller.look(Math.Vec2(10.0, -100.0))
+    assert(Math.nearly_equal(controller.yaw(), -0.1))
+    assert(Math.nearly_equal(controller.pitch(), 0.5))
+    assert(controller.transform().forward().y > 0.0)
+}

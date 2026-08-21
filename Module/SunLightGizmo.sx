@@ -1,0 +1,15 @@
+use GFX.Color
+
+public struct SunLightGizmo {
+    var color:Color
+    var radius:float
+    var ray_length:float
+    var visible:bool
+
+    init(color:Color = Color.gizmos(), visible:bool = true) {
+        self.color = color
+        self.radius = 0.18
+        self.ray_length = 0.9
+        self.visible = visible
+    }
+}

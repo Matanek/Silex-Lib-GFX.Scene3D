@@ -1,0 +1,87 @@
+use GFX.Assets.Image
+use GFX.Color
+use GFX.Scene3D.Camera
+use GFX.Scene3D.Geometry
+use GFX.Scene3D.Grid
+use GFX.Scene3D.Instances
+use GFX.Scene3D.Material
+use GFX.Scene3D.Material.AlphaMode
+use GFX.Scene3D.Material.MaterialSettings
+use GFX.Scene3D.Material.MaterialTexture
+use GFX.Scene3D.Material.MaterialTextures
+use GFX.Scene3D.Mesh
+use GFX.Scene3D.Meshes
+use GFX.Scene3D.PointLight
+use GFX.Scene3D.Rotator
+use GFX.Scene3D.Shadow
+use GFX.Scene3D.Skybox.ProceduralSky
+use GFX.Scene3D.Skybox.Skybox
+use GFX.Scene3D.ToneMapping
+use GFX.Scene3D.Transform
+use STD.Math
+
+test "name 3D concepts through their domain instead of their declarations" {
+    var meshes = Meshes()
+    let handle = meshes.add(Geometry.Cube.make(Math.Vec3(2.0)))
+    let mesh = Mesh(
+        asset:handle,
+        shadow_distance:20.0,
+        shadow_cascades:1
+    )
+    let material = Material(albedo:Color.red_500(), metallic:0.8)
+    var images = Image.Store()
+    let albedo = images.add(Image.solid(Color.white()))
+    var transparent = MaterialSettings(
+        textures:MaterialTextures(albedo:MaterialTexture(
+            image:albedo,
+            scale:Math.Vec2(2.0)
+        )),
+        alpha:AlphaMode.blend,
+        double_sided:true
+    )
+    let transform = Transform(position:Math.Vec3(0.0, 1.0, 2.0))
+    let camera = Camera()
+    let grid = Grid(spacing:2.0, fade_distance:80.0)
+    let skybox = Skybox.procedural(ProceduralSky.golden_hour())
+    let rotator = Rotator(x_speed:0.1, y_speed:0.2, z_speed:0.3)
+    let light = PointLight(shadow:Shadow(softness:0.5))
+    let tone_mapping = ToneMapping.aces(exposure:1.0)
+
+    assert(mesh.asset == handle)
+    assert(mesh.casts_shadows)
+    assert(mesh.shadow_distance == 20.0)
+    assert(mesh.shadow_cascades == 1)
+    assert(material.metallic == 0.8)
+    if let texture = transparent.textures.albedo { assert(texture.image == albedo) }
+    else { panic("albedo texture is missing") }
+    assert(transparent.alpha == AlphaMode.blend)
+    assert(transparent.double_sided)
+    assert(transform.position == Math.Vec3(0.0, 1.0, 2.0))
+    assert(camera.is_active())
+    assert(grid.fade_distance == 80.0)
+    assert(skybox.enabled)
+    assert(skybox.visible)
+    assert(skybox.diffuse_intensity == 0.35)
+    assert(rotator.y_speed == 0.2)
+    assert(light.shadow.softness == 0.5)
+    assert(tone_mapping.exposure == 1.0)
+}
+
+test "store many transforms in one instanced Scene3D component" {
+    var instances = Instances([
+        Transform(position:Math.Vec3(1.0, 0.0, 2.0)),
+        Transform(position:Math.Vec3(3.0, 0.0, 4.0))
+    ])
+    let initial_revision = instances.revision()
+
+    assert(instances.count() == 2)
+    assert(instances.transforms()[1].position == Math.Vec3(3.0, 0.0, 4.0))
+    instances.append(Transform(position:Math.Vec3(5.0, 0.0, 6.0)))
+    assert(instances.count() == 3)
+    assert(instances.revision() == initial_revision + 1)
+    instances.replace([Transform(scale:Math.Vec3(0.25))])
+    assert(instances.count() == 1)
+    assert(instances.transforms()[0].scale == Math.Vec3(0.25))
+    instances.clear()
+    assert(instances.count() == 0)
+}

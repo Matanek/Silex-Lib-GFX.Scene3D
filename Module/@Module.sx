@@ -1,0 +1,82 @@
+public use GFX.Scene3D.AmbientLight.AmbientLight
+public use GFX.Scene3D.Camera.Camera
+public use GFX.Scene3D.CubeProjectorLight.CubeProjectorLight
+public use GFX.Scene3D.CubeProjectorLightGizmo.CubeProjectorLightGizmo
+public use GFX.Scene3D.Grid.Grid
+public use GFX.Scene3D.Instances.Instances
+public use GFX.Scene3D.Material.Material
+public use GFX.Scene3D.Material.AlphaMode
+public use GFX.Scene3D.Material.MaterialSettings
+public use GFX.Scene3D.Material.MaterialTexture
+public use GFX.Scene3D.Material.MaterialTextures
+public use GFX.Scene3D.Mesh.Mesh
+public use GFX.Scene3D.MeshHandle.MeshHandle
+public use GFX.Scene3D.Meshes.Meshes
+public use GFX.Scene3D.Model.instantiate
+public use GFX.Scene3D.Model.ModelInstance
+public use GFX.Scene3D.PointLight.PointLight
+public use GFX.Scene3D.PointLightGizmo.PointLightGizmo
+public use GFX.Scene3D.Plugin.Plugin
+public use GFX.Scene3D.Rotator.Rotator
+public use GFX.Scene3D.Sampling.Sampling
+public use GFX.Scene3D.Scatter.Scatter
+public use GFX.Scene3D.Scatter.ScatterArea
+public use GFX.Scene3D.Selectable.Selectable
+public use GFX.Scene3D.Shadow.Shadow
+public use GFX.Scene3D.Skybox.ProceduralSky
+public use GFX.Scene3D.Skybox.Skybox
+public use GFX.Scene3D.Sprite.Billboard
+public use GFX.Scene3D.Sprite.Sprite
+public use GFX.Scene3D.SpotProjectorLight.SpotProjectorLight
+public use GFX.Scene3D.SpotProjectorLightGizmo.SpotProjectorLightGizmo
+public use GFX.Scene3D.SunLight.SunLight
+public use GFX.Scene3D.SunLightGizmo.SunLightGizmo
+public use GFX.Scene3D.ToneMapping.ToneMapping
+public use GFX.Scene3D.Transform.Transform
+public use GFX.Scene3D.TubeProjectorLight.TubeProjectorLight
+public use GFX.Scene3D.TubeProjectorLightGizmo.TubeProjectorLightGizmo
+public use GFX.Scene3D.ViewportCamera.ViewportCamera
+
+contribute GFX.Components {
+    public use GFX.Scene3D.AmbientLight as AmbientLight3D
+    public use GFX.Scene3D.Camera as Camera3D
+    public use GFX.Scene3D.CubeProjectorLight as CubeProjectorLight3D
+    public use GFX.Scene3D.CubeProjectorLightGizmo as CubeProjectorLightGizmo3D
+    public use GFX.Scene3D.Instances as Instances3D
+    public use GFX.Scene3D.Material.AlphaMode as AlphaMode3D
+    public use GFX.Scene3D.Material as Material3D
+    public use GFX.Scene3D.Material.MaterialSettings as MaterialSettings3D
+    public use GFX.Scene3D.Material.MaterialTexture as MaterialTexture3D
+    public use GFX.Scene3D.Material.MaterialTextures as MaterialTextures3D
+    public use GFX.Scene3D.Mesh as Mesh3D
+    public use GFX.Scene3D.PointLight as PointLight3D
+    public use GFX.Scene3D.PointLightGizmo as PointLightGizmo3D
+    public use GFX.Scene3D.Rotator as Rotator3D
+    public use GFX.Scene3D.Selectable as Selectable3D
+    public use GFX.Scene3D.Shadow as Shadow3D
+    public use GFX.Scene3D.Sprite as Sprite3D
+    public use GFX.Scene3D.SpotProjectorLight as SpotProjectorLight3D
+    public use GFX.Scene3D.SpotProjectorLightGizmo as SpotProjectorLightGizmo3D
+    public use GFX.Scene3D.SunLight as SunLight3D
+    public use GFX.Scene3D.SunLightGizmo as SunLightGizmo3D
+    public use GFX.Scene3D.Transform as Transform3D
+    public use GFX.Scene3D.TubeProjectorLight as TubeProjectorLight3D
+    public use GFX.Scene3D.TubeProjectorLightGizmo as TubeProjectorLightGizmo3D
+}
+
+contribute GFX.Plugins {
+    public use GFX.Scene3D.Grid as Grid3D
+    public use GFX.Scene3D.Catalogs.FirstPersonCamera3D
+    public use GFX.Scene3D.Plugin as Scene3D
+    public use GFX.Scene3D.ViewportCamera as ViewportCamera3D
+    public use GFX.Scene3D.ViewportCamera.Controls as ViewportCamera3DControls
+    public use GFX.Scene3D.ViewportCamera.View as ViewportCamera3DView
+}
+
+contribute GFX.Resources {
+    public use GFX.Scene3D.Meshes as Meshes3D
+    public use GFX.Scene3D.ViewportCamera.Controller as FirstPersonCamera3D
+    public use GFX.Scene3D.Skybox.Skybox as Skybox3D
+    public use GFX.Scene3D.ToneMapping as ToneMapping3D
+    public use GFX.Scene3D.ViewportCamera.Controller as ViewportCamera3D
+}

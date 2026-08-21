@@ -1,0 +1,88 @@
+use GFX.Application
+use GFX.Application.Plugin as PluginProtocol
+use GFX.Application.Schedule
+use GFX.Assets.Image
+use GFX.ECS
+use GFX.GPU
+use GFX.Rendering
+use GFX.Rendering.Renderer as RenderingRenderer
+use GFX.Scene3D.Meshes
+use GFX.Scene3D.Mesh
+use GFX.Scene3D.Renderer
+use GFX.Scene3D.Skybox.Skybox
+use GFX.Scene3D.ToneMapping
+use GFX.Scene3D.Transform
+use GFX.Window
+
+public struct Plugin:PluginProtocol {
+    func id() str { return "GFX.Scene3D.Plugin" }
+
+    func build(application:&Application) {
+        application.add_plugin(ECS.Plugin())
+        application.add_plugin(Rendering.Plugin())
+        if !application.resources().has<Meshes>() { application.add_resource(Meshes()) }
+        if !application.resources().has<Image.Store>() { application.add_resource(Image.Store()) }
+        if !application.resources().has<Skybox>() {
+            application.add_resource(Skybox.none())
+        }
+        if !application.resources().has<ToneMapping>() { application.add_resource(ToneMapping.aces()) }
+        application.add_resource(Renderer())
+        {
+            var resources = application.resources()
+            var rendering = resources.get_mut<Rendering.Renderer>()
+            rendering.add_pass("GFX.Scene3D", render_scene, depth:true)
+        }
+        application.add_system(Schedule.startup, start_scene)
+        application.add_system(Schedule.render, update_viewport)
+        application.add_system(Schedule.render, update_skybox)
+        application.add_system(Schedule.render, update_tone_mapping)
+        application.add_system(Schedule.render, prepare_scene)
+        application.add_system(Schedule.shutdown, stop_scene)
+    }
+}
+
+func start_scene(
+    device:@GPU.Device,
+    surface:@GPU.Surface,
+    rendering:@RenderingRenderer,
+    renderer:&Renderer
+) {
+    renderer.start(device, surface, rendering.sample_count())
+}
+
+func update_viewport(window:@Window, renderer:&Renderer) {
+    renderer.set_viewport(window.pixel_size())
+}
+
+func update_tone_mapping(tone_mapping:@ToneMapping, renderer:&Renderer) {
+    renderer.set_tone_mapping(tone_mapping)
+}
+
+func update_skybox(skybox:@Skybox, renderer:&Renderer) {
+    renderer.set_skybox(skybox)
+}
+
+func prepare_scene(
+    device:@GPU.Device,
+    world:@ECS.World,
+    query:ECS.Query<(ECS.Entity, @Transform, @Mesh)>,
+    meshes:@Meshes,
+    images:@Image.Store,
+    renderer:&Renderer
+) {
+    renderer.begin_prepare(world)
+    for (entity, transform, mesh) in query {
+        renderer.collect(world, entity, transform, mesh, meshes)
+    }
+    renderer.finish_prepare(device, meshes, images)
+}
+
+func render_scene(pass:@GPU.RenderPass, application:@Application) {
+    var renderer = application.resources().get<Renderer>()
+    renderer.draw(pass)
+}
+
+func stop_scene(application:Application) {
+    var removed = application.resources().remove<Renderer>()
+    assert(removed != null)
+}

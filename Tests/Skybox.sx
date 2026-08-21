@@ -1,0 +1,18 @@
+use GFX.Scene3D.ProceduralSky
+use GFX.Scene3D.Skybox
+
+test "compose a skybox from a procedural sky" {
+    let disabled = Skybox.none()
+    let day = Skybox.procedural(ProceduralSky.day())
+    let golden_hour = ProceduralSky.golden_hour()
+    let sunset = ProceduralSky.sunset()
+
+    assert(!disabled.enabled)
+    assert(!disabled.visible)
+    assert(disabled.diffuse_intensity == 0.0)
+    assert(disabled.specular_intensity == 0.0)
+    assert(day.enabled)
+    assert(day.visible)
+    assert(golden_hour.sky_intensity == 0.95)
+    assert(sunset.sky_intensity == 0.82)
+}

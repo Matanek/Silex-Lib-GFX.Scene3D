@@ -1,0 +1,489 @@
+use GFX.Color
+use GFX.Scene3D.Geometry
+use GFX.Scene3D.Gizmos.Frame as GizmoFrame
+use GFX.Scene3D.Grid
+use GFX.Scene3D.Lighting.Frame as LightingFrame
+use GFX.Scene3D.Lighting.Kind as LightKind
+use GFX.Scene3D.Material
+use GFX.Scene3D.Shadows.Frame as ShadowFrame
+use GFX.Scene3D.Shadows
+use GFX.Scene3D.Skybox.Skybox
+use GFX.Scene3D.ToneMapping
+use Interop.C
+use STD.Math
+
+func vertices(mesh:@Geometry.Mesh) str {
+    let source = mesh.vertices()
+    var bytes = storage(source.count() * 48)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    var index = 0
+    while index < source.count() {
+        let vertex = source[index]
+        let offset = index * 48
+        write_vec3(address, offset, vertex.position)
+        write_vec3(address, offset + 12, vertex.normal)
+        write_vec2(address, offset + 24, vertex.uv)
+        write_color(address, offset + 32, vertex.color)
+        index++
+    }
+    return bytes
+}
+
+func indices(mesh:@Geometry.Mesh) str {
+    let source = mesh.indices()
+    var bytes = storage(source.count() * 4)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    var index = 0
+    while index < source.count() {
+        let stored = C.store<uint32>(address, (index * 4) as uint, source[index])
+        index++
+    }
+    return bytes
+}
+
+func draw(
+    model:Math.Mat4,
+    view_projection:Math.Mat4,
+    albedo:Color
+) str {
+    var bytes = storage(144)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_mat4(address, 0, model)
+    write_mat4(address, 64, view_projection)
+    write_color(address, 128, albedo)
+    return bytes
+}
+
+func instance_draw(view_projection:Math.Mat4, albedo:Color) str {
+    var bytes = storage(80)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_mat4(address, 0, view_projection)
+    write_color(address, 64, albedo)
+    return bytes
+}
+
+func instances(values:@Math.Mat4[]) str {
+    var bytes = storage(values.count() * 64)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    var index = 0
+    while index < values.count() {
+        write_mat4(address, index * 64, values[index])
+        index++
+    }
+    return bytes
+}
+
+func matrix(value:Math.Mat4) str {
+    var bytes = storage(64)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_mat4(address, 0, value)
+    return bytes
+}
+
+func vector(value:Math.Vec4) str {
+    var bytes = storage(16)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_vec4(address, 0, value)
+    return bytes
+}
+
+func material(
+    value:Material,
+    textures:GFX.Scene3D.Material.MaterialTextures,
+    alpha:GFX.Scene3D.Material.AlphaMode,
+    alpha_cutoff:float,
+    double_sided:bool,
+    unlit:bool,
+    camera_position:Math.Vec3
+) str {
+    var bytes = storage(176)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_vec4(address, 0, Math.Vec4(
+        value.metallic,
+        value.roughness,
+        value.occlusion,
+        value.emission_intensity
+    ))
+    write_color(address, 16, value.emission)
+    write_vec4(address, 32, Math.Vec4(camera_position, 1.0))
+    var flags = 0.0
+    if double_sided { flags += 1.0 }
+    if unlit { flags += 2.0 }
+    write_vec4(address, 48, Math.Vec4(
+        alpha_mode(alpha),
+        alpha_cutoff,
+        textures.normal_scale,
+        flags
+    ))
+    write_texture_transform(address, 64, textures.albedo)
+    write_texture_transform(address, 80, textures.normal)
+    write_texture_transform(address, 96, textures.metallic_roughness)
+    write_texture_transform(address, 112, textures.occlusion)
+    write_texture_transform(address, 128, textures.emission)
+    write_vec4(address, 144, Math.Vec4(
+        texture_rotation(textures.albedo),
+        texture_rotation(textures.normal),
+        texture_rotation(textures.metallic_roughness),
+        texture_rotation(textures.occlusion)
+    ))
+    write_vec4(address, 160, Math.Vec4(
+        texture_rotation(textures.emission),
+        0.0,
+        0.0,
+        0.0
+    ))
+    return bytes
+}
+
+func write_texture_transform(
+    address:uint,
+    offset:int,
+    texture:GFX.Scene3D.Material.MaterialTexture?
+) {
+    if let value = texture {
+        write_vec4(address, offset, Math.Vec4(
+            value.offset.x,
+            value.offset.y,
+            value.scale.x,
+            value.scale.y
+        ))
+    } else {
+        write_vec4(address, offset, Math.Vec4(0.0, 0.0, 1.0, 1.0))
+    }
+}
+
+func texture_rotation(texture:GFX.Scene3D.Material.MaterialTexture?) float {
+    if let value = texture { return value.rotation }
+    return 0.0
+}
+
+func alpha_mode(value:GFX.Scene3D.Material.AlphaMode) float {
+    return match value { opaque => 0.0; mask => 1.0; blend => 2.0 }
+}
+
+func lighting(frame:@LightingFrame, skybox:Skybox) str {
+    var bytes = "\0"
+    refresh_lighting(bytes, frame, skybox)
+    return bytes
+}
+
+func refresh_lighting(bytes:&str, frame:@LightingFrame, skybox:Skybox) {
+    ensure_storage(bytes, 1488)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_color(address, 0, frame.ambient())
+    write_vec4(address, 16, Math.Vec4(frame.count() as float, 0.0, 0.0, 0.0))
+    var index = 0
+    for light in frame.all() {
+        let offset = 32 + index * 80
+        write_vec4(address, offset, Math.Vec4(light.direction, light.intensity))
+        write_vec4(address, offset + 16, Math.Vec4(
+            light.color.r,
+            light.color.g,
+            light.color.b,
+            light.kind.raw_value as float
+        ))
+        write_vec4(address, offset + 32, Math.Vec4(light.position, light.reach))
+        write_vec4(address, offset + 48, Math.Vec4(
+            Math.cos(light.angle),
+            Math.cos(light.projection_angle),
+            light.falloff,
+            light.influence_softness
+        ))
+        write_vec4(address, offset + 64, Math.Vec4(
+            light.projection_size.x,
+            light.projection_size.y,
+            light.projection_size.z,
+            light.projection_radius
+        ))
+        index++
+    }
+    write_skybox(address, 1312, skybox)
+}
+
+func shadows(lighting:@LightingFrame, frame:@ShadowFrame) str {
+    var bytes = "\0"
+    refresh_shadows(bytes, lighting, frame)
+    return bytes
+}
+
+func refresh_shadows(
+    bytes:&str,
+    lighting:@LightingFrame,
+    frame:@ShadowFrame
+) {
+    ensure_storage(bytes, 3600)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    var light_index = 0
+    for light in lighting.all() {
+        let enabled = frame.faces_for(light_index) > 0
+        var shadow_type = 0.0
+        if enabled { shadow_type = 1.0 }
+        if enabled && light.kind == LightKind.point { shadow_type = 2.0 }
+        write_float(address, light_index * 16, shadow_type)
+        write_float(address, light_index * 16 + 4, light.shadow.bias)
+        write_float(
+            address,
+            light_index * 16 + 8,
+            frame.grid() as float / Shadows.atlas_size() as float
+        )
+        write_float(address, light_index * 16 + 12, light.shadow.normal_offset)
+        write_float(address, 256 + light_index * 16, frame.sample_base(light_index) as float)
+        write_float(address, 256 + light_index * 16 + 4, frame.faces_for(light_index) as float)
+        write_float(address, 256 + light_index * 16 + 8, light.kind.raw_value as float)
+        write_float(address, 256 + light_index * 16 + 12, light.shadow.softness)
+        light_index++
+    }
+    var face_index = 0
+    for face in frame.all_faces() {
+        if !face.point {
+            write_mat4(address, 512 + face.projected_index * 64, face.view_projection)
+            write_vec4(address, 1536 + face.projected_index * 16, face.atlas_rect)
+            write_vec4(address, 3328 + face.projected_index * 16, Math.Vec4(
+                face.split_near,
+                face.split_far,
+                0.0,
+                0.0
+            ))
+        } else {
+            write_vec4(address, 1792 + face_index * 16, face.atlas_rect)
+        }
+        face_index++
+    }
+    write_vec4(address, 3584, Math.Vec4(frame.forward(), 0.0))
+}
+
+func shadow_draw(model:Math.Mat4, view_projection:Math.Mat4) str {
+    var bytes = storage(128)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_mat4(address, 0, model)
+    write_mat4(address, 64, view_projection)
+    return bytes
+}
+
+func point_shadow_draw(
+    model:Math.Mat4,
+    view_projection:Math.Mat4,
+    light_position_range:Math.Vec4
+) str {
+    var bytes = storage(144)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_mat4(address, 0, view_projection.multiply(model))
+    write_mat4(address, 64, model)
+    write_vec4(address, 128, light_position_range)
+    return bytes
+}
+
+func gizmo_vertices(frame:@GizmoFrame) str {
+    var byte_count = frame.count() * 28
+    if byte_count < 1 { byte_count = 1 }
+    var bytes = storage(byte_count)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    var index = 0
+    for vertex in frame.all() {
+        let offset = index * 28
+        write_vec3(address, offset, vertex.position)
+        write_color(address, offset + 12, vertex.color)
+        index++
+    }
+    return bytes
+}
+
+func grid(
+    inverse_view_projection:Math.Mat4,
+    view_projection:Math.Mat4,
+    value:Grid
+) str {
+    var bytes = storage(224)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_mat4(address, 0, inverse_view_projection)
+    write_mat4(address, 64, view_projection)
+    write_color(address, 128, value.minor_color)
+    write_color(address, 144, value.major_color)
+    write_color(address, 160, value.x_axis_color)
+    write_color(address, 176, value.z_axis_color)
+    write_vec4(address, 192, Math.Vec4(
+        value.spacing,
+        value.major_every as float,
+        value.line_width,
+        value.axis_width
+    ))
+    write_vec4(address, 208, Math.Vec4(value.fade_distance, 0.0, 0.0, 0.0))
+    return bytes
+}
+
+func tone_mapping(value:ToneMapping) str {
+    var bytes = "\0"
+    refresh_tone_mapping(bytes, value)
+    return bytes
+}
+
+func refresh_tone_mapping(bytes:&str, value:ToneMapping) {
+    ensure_storage(bytes, 32)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_vec4(address, 0, Math.Vec4(
+        value.method.raw_value as float,
+        value.exposure,
+        value.white_point,
+        value.normalization.raw_value as float
+    ))
+    var split = 0.0
+    if value.split_comparison { split = 1.0 }
+    write_vec4(address, 16, Math.Vec4(
+        value.filmic_look.raw_value as float,
+        value.agx_look.raw_value as float,
+        value.split_position,
+        split
+    ))
+}
+
+func skybox_background(
+    inverse_view_projection:Math.Mat4,
+    camera_position:Math.Vec3,
+    skybox:Skybox,
+    tone_mapping:ToneMapping
+) str {
+    var bytes = "\0"
+    refresh_skybox_background(
+        bytes,
+        inverse_view_projection,
+        camera_position,
+        skybox,
+        tone_mapping
+    )
+    return bytes
+}
+
+func refresh_skybox_background(
+    bytes:&str,
+    inverse_view_projection:Math.Mat4,
+    camera_position:Math.Vec3,
+    skybox:Skybox,
+    tone_mapping:ToneMapping
+) {
+    ensure_storage(bytes, 288)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_mat4(address, 0, inverse_view_projection)
+    write_vec4(address, 64, Math.Vec4(camera_position, 1.0))
+    write_skybox(address, 80, skybox)
+    write_tone_mapping(address, 256, tone_mapping)
+}
+
+local func write_skybox(address:uint, offset:int, value:Skybox) {
+    var enabled = 0.0
+    var background = 0.0
+    if value.enabled { enabled = 1.0 }
+    if value.visible { background = 1.0 }
+    let sky = value.sky()
+    let sun_direction = sky.sun_direction.normalized()
+    write_color_vec4(address, offset, sky.day_zenith(), sky.sky_intensity)
+    write_color_vec4(address, offset + 16, sky.day_horizon(), background)
+    write_color_vec4(
+        address,
+        offset + 32,
+        sky.night_zenith(),
+        value.diffuse_intensity
+    )
+    write_color_vec4(address, offset + 48, sky.night_horizon(), -1.0)
+    write_vec4(address, offset + 64, Math.Vec4(
+        sun_direction,
+        sky.sun_intensity
+    ))
+    write_color_vec4(address, offset + 80, sky.sun_color(), value.specular_intensity)
+    write_vec4(address, offset + 96, Math.Vec4(
+        sky.sun_angular_radius(),
+        sky.sun_softness(),
+        enabled,
+        2.0
+    ))
+    write_vec4(address, offset + 112, Math.Vec4(
+        sky.sun_halo_intensity(),
+        sky.sun_halo_angular_radius(),
+        sky.sun_halo_softness(),
+        0.0
+    ))
+    write_vec4(address, offset + 128, Math.Vec4(
+        sky.sun_glow_intensity(),
+        sky.sun_glow_angular_radius(),
+        sky.sun_glow_softness(),
+        0.0
+    ))
+    write_color_vec4(address, offset + 144, sky.horizon_glow_color(), 1.0)
+    write_vec4(address, offset + 160, Math.Vec4(
+        sky.horizon_glow_intensity(),
+        sky.horizon_glow_height(),
+        sky.horizon_glow_falloff(),
+        0.18
+    ))
+}
+
+local func write_color_vec4(
+    address:uint,
+    offset:int,
+    color:Color,
+    value:float
+) {
+    write_vec4(address, offset, Math.Vec4(color.r, color.g, color.b, value))
+}
+
+local func write_tone_mapping(address:uint, offset:int, value:ToneMapping) {
+    write_vec4(address, offset, Math.Vec4(
+        value.method.raw_value as float,
+        value.exposure,
+        value.white_point,
+        value.normalization.raw_value as float
+    ))
+    var split = 0.0
+    if value.split_comparison { split = 1.0 }
+    write_vec4(address, offset + 16, Math.Vec4(
+        value.filmic_look.raw_value as float,
+        value.agx_look.raw_value as float,
+        value.split_position,
+        split
+    ))
+}
+
+local func storage(minimum:int) str {
+    var bytes = "\0"
+    while C.byte_count(bytes) < minimum as uint { bytes = bytes + bytes }
+    return bytes
+}
+
+local func ensure_storage(bytes:&str, minimum:int) {
+    if C.byte_count(bytes) < minimum as uint { bytes = storage(minimum) }
+}
+
+local func write_float(address:uint, offset:int, value:float) {
+    let stored = C.store<float32>(address, offset as uint, value as float32)
+}
+
+local func write_vec2(address:uint, offset:int, value:Math.Vec2) {
+    write_float(address, offset, value.x)
+    write_float(address, offset + 4, value.y)
+}
+
+local func write_vec3(address:uint, offset:int, value:Math.Vec3) {
+    write_float(address, offset, value.x)
+    write_float(address, offset + 4, value.y)
+    write_float(address, offset + 8, value.z)
+}
+
+local func write_vec4(address:uint, offset:int, value:Math.Vec4) {
+    write_float(address, offset, value.x)
+    write_float(address, offset + 4, value.y)
+    write_float(address, offset + 8, value.z)
+    write_float(address, offset + 12, value.w)
+}
+
+local func write_mat4(address:uint, offset:int, value:Math.Mat4) {
+    write_vec4(address, offset, value.x)
+    write_vec4(address, offset + 16, value.y)
+    write_vec4(address, offset + 32, value.z)
+    write_vec4(address, offset + 48, value.w)
+}
+
+local func write_color(address:uint, offset:int, value:Color) {
+    write_float(address, offset, value.r)
+    write_float(address, offset + 4, value.g)
+    write_float(address, offset + 8, value.b)
+    write_float(address, offset + 12, value.a)
+}

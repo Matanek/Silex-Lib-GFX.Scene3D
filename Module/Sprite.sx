@@ -1,0 +1,60 @@
+use GFX.Assets.Image
+use GFX.Color
+use GFX.Scene3D.Sampling as Sampling
+use STD.Math
+
+public enum Billboard {
+    none
+    face_camera
+    face_camera_y
+}
+
+public struct Sprite {
+    var image:Image.Handle
+    var size:Math.Vec2
+    var pivot:Math.Vec2
+    var color:Color
+    var billboard:Billboard
+    var visible:bool
+    private var current_region:Image.Region?
+    private var current_sampling:Sampling
+
+    init(
+        image:Image.Handle = Image.Handle(),
+        size:Math.Vec2 = Math.Vec2(1.0),
+        pivot:Math.Vec2 = Math.Vec2(0.5),
+        color:Color = Color.white(),
+        billboard:Billboard = Billboard.face_camera,
+        visible:bool = true
+    ) {
+        self.image = image
+        self.size = size
+        self.pivot = pivot
+        self.color = color
+        self.billboard = billboard
+        self.visible = visible
+        self.current_region = null
+        self.current_sampling = Sampling.smooth
+    }
+
+    func region() Image.Region? { return self.current_region }
+    func region(value:Image.Region) { self.current_region = value }
+    func sampling() Sampling { return self.current_sampling }
+    func sampling(value:Sampling) { self.current_sampling = value }
+
+    module func asset() Image.Handle { return self.image }
+    module func sprite_size() Math.Vec2 { return self.size }
+    module func sprite_pivot() Math.Vec2 { return self.pivot }
+    module func tint() Color { return self.color }
+    module func billboard_mode() int {
+        if self.billboard == Billboard.none { return 0 }
+        if self.billboard == Billboard.face_camera_y { return 2 }
+        return 1
+    }
+    module func is_visible() bool { return self.visible }
+    module func image_region() Image.Region? { return self.current_region }
+    module func sampling_mode() int {
+        if self.current_sampling == Sampling.pixelated { return 1 }
+        return 0
+    }
+}

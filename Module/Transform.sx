@@ -1,0 +1,41 @@
+use STD.Math
+
+public struct Transform {
+    var position:Math.Vec3
+    var rotation:Math.Quat
+    var scale:Math.Vec3
+
+    init(
+        position:Math.Vec3 = Math.Vec3(),
+        rotation:Math.Quat = Math.Quat(),
+        scale:Math.Vec3 = Math.Vec3(1.0)
+    ) {
+        self.position = position
+        self.rotation = rotation
+        self.scale = scale
+    }
+
+    func matrix() Math.Mat4 {
+        return Math.Mat4.transform(
+            self.position,
+            self.rotation.to_mat3(),
+            self.scale
+        )
+    }
+
+    func view_matrix() Math.Mat4 {
+        return Math.Mat4.look_at(
+            self.position,
+            self.position.add(self.forward()),
+            self.up()
+        )
+    }
+
+    func forward() Math.Vec3 {
+        return self.rotation.rotate(Math.Vec3.front()).normalized()
+    }
+
+    func up() Math.Vec3 {
+        return self.rotation.rotate(Math.Vec3.up()).normalized()
+    }
+}

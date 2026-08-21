@@ -1,0 +1,34 @@
+use GFX.Color
+use GFX.Scene3D.Shadow as Shadow
+use STD.Math
+
+public struct CubeProjectorLight {
+    var direction:Math.Vec3
+    var color:Color
+    var intensity:float
+    var size:Math.Vec3
+    var softness:float
+    var falloff:float
+    var shadow_caster_distance:float
+    var shadow:Shadow
+    var enabled:bool
+
+    init(
+        direction:Math.Vec3 = Math.Vec3(-0.4, -1.0, -0.3),
+        color:Color = Color.white(),
+        intensity:float = 1.0,
+        size:Math.Vec3 = Math.Vec3(2.0, 2.0, 4.0),
+        shadow:Shadow = Shadow.projector(),
+        enabled:bool = true
+    ) {
+        self.direction = direction
+        self.color = color
+        self.intensity = intensity
+        self.size = size
+        self.softness = 0.25
+        self.falloff = 1.0
+        self.shadow_caster_distance = 4.0
+        self.shadow = shadow
+        self.enabled = enabled
+    }
+}

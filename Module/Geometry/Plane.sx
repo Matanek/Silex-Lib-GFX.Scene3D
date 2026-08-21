@@ -1,0 +1,16 @@
+use GFX.Scene3D.Geometry.Mesh as Mesh
+use GFX.Scene3D.Geometry.Vertex as Vertex
+use STD.Math
+
+public static struct Plane {
+    func make(size:Math.Vec2 = Math.Vec2(1.0)) Mesh {
+        let half = size.multiply(0.5)
+        var vertices:Vertex[] = []
+        vertices.append(Vertex(Math.Vec3(-half.x, -half.y, 0.0), Math.Vec3.back(), Math.Vec2(0.0, 1.0)))
+        vertices.append(Vertex(Math.Vec3(half.x, -half.y, 0.0), Math.Vec3.back(), Math.Vec2(1.0, 1.0)))
+        vertices.append(Vertex(Math.Vec3(half.x, half.y, 0.0), Math.Vec3.back(), Math.Vec2(1.0, 0.0)))
+        vertices.append(Vertex(Math.Vec3(-half.x, half.y, 0.0), Math.Vec3.back(), Math.Vec2(0.0, 0.0)))
+        let indices:uint32[] = [0, 1, 2, 0, 2, 3]
+        return Mesh(vertices, indices)
+    }
+}

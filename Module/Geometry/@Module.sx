@@ -1,0 +1,4 @@
+public use GFX.Scene3D.Geometry.Cube.Cube
+public use GFX.Scene3D.Geometry.Mesh.Mesh
+public use GFX.Scene3D.Geometry.Plane.Plane
+public use GFX.Scene3D.Geometry.Vertex.Vertex

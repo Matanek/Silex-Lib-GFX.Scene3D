@@ -1,0 +1,37 @@
+use GFX.Color
+use GFX.Scene3D.Shadow as Shadow
+use STD.Math
+
+public struct SunLight {
+    var direction:Math.Vec3
+    var color:Color
+    var intensity:float
+    var shadow_center:Math.Vec3
+    var shadow_size:Math.Vec2
+    var shadow_depth:float
+    var shadow_distance:float
+    var shadow_cascade_distances:Math.Vec4
+    var shadow_follows_camera:bool
+    var shadow:Shadow
+    var enabled:bool
+
+    init(
+        direction:Math.Vec3 = Math.Vec3(-0.4, -1.0, -0.3),
+        color:Color = Color.white(),
+        intensity:float = 1.0,
+        shadow:Shadow = Shadow.sun(),
+        enabled:bool = true
+    ) {
+        self.direction = direction
+        self.color = color
+        self.intensity = intensity
+        self.shadow_center = Math.Vec3(0.0, 0.8, 0.0)
+        self.shadow_size = Math.Vec2(8.0)
+        self.shadow_depth = 12.0
+        self.shadow_distance = 0.0
+        self.shadow_cascade_distances = Math.Vec4()
+        self.shadow_follows_camera = true
+        self.shadow = shadow
+        self.enabled = enabled
+    }
+}

@@ -1,0 +1,32 @@
+use GFX.Components
+use GFX.Plugins
+use GFX.Resources
+use GFX.Scene3D
+
+func injected(
+    meshes:&Resources.Meshes3D,
+    camera:&Resources.ViewportCamera3D,
+    skybox:@Resources.Skybox3D,
+    tone_mapping:@Resources.ToneMapping3D
+) {}
+
+test "consume Scene3D directly and through the GFX catalogs" {
+    let direct = Scene3D.Transform()
+    let transform = Components.Transform3D()
+    let material = Components.Material3D(metallic:0.5)
+    let scene = Plugins.Scene3D()
+    let grid = Plugins.Grid3D()
+    let viewport = Plugins.ViewportCamera3D(Plugins.ViewportCamera3D.Settings(
+        distance:5.0
+    ))
+    let first_person = Plugins.FirstPersonCamera3D(
+        Plugins.FirstPersonCamera3D.Settings()..move_speed = 4.0
+    )
+
+    assert(direct.position == transform.position)
+    assert(material.metallic == 0.5)
+    assert(scene.id() == "GFX.Scene3D.Plugin")
+    assert(grid.id() == "GFX.Scene3D.Grid")
+    assert(viewport.id() == "GFX.Scene3D.ViewportCamera")
+    assert(first_person.id() == "GFX.Scene3D.FirstPersonCamera")
+}

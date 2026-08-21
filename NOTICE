@@ -1,0 +1,7 @@
+Silex GFX.Scene3D
+Copyright 2026 Matanek and Silex contributors
+
+This product is licensed under the Apache License, Version 2.0.
+
+GFX.Scene3D includes generated RGBA16F tone-mapping lookup tables derived from
+the Blender OpenColorIO color-management data identified alongside the assets.

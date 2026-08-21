@@ -1,0 +1,296 @@
+use GFX.Scene3D.Transform
+use STD.Math
+use STD.Randomizer
+
+enum AreaKind {
+    circle
+    box
+}
+
+public struct ScatterArea {
+    private let kind:AreaKind
+    private let area_center:Math.Vec3
+    private let area_radius:float
+    private let area_size:Math.Vec2
+
+    module init() {
+        self.kind = AreaKind.circle
+        self.area_center = Math.Vec3()
+        self.area_radius = 1.0
+        self.area_size = Math.Vec2(2.0)
+    }
+
+    module init(
+        kind:AreaKind,
+        center:Math.Vec3,
+        radius:float,
+        size:Math.Vec2
+    ) {
+        self.kind = kind
+        self.area_center = center
+        self.area_radius = radius
+        self.area_size = size
+    }
+
+    static func circle(
+        radius:float,
+        center:Math.Vec3 = Math.Vec3()
+    ) ScatterArea {
+        if radius <= 0.0 {
+            panic("GFX.Scene3D scatter circle radius must be positive")
+        }
+        return ScatterArea(
+            AreaKind.circle,
+            center,
+            radius,
+            Math.Vec2(radius * 2.0)
+        )
+    }
+
+    static func box(
+        size:Math.Vec2,
+        center:Math.Vec3 = Math.Vec3()
+    ) ScatterArea {
+        if size.x <= 0.0 || size.y <= 0.0 {
+            panic("GFX.Scene3D scatter box size must be positive")
+        }
+        return ScatterArea(AreaKind.box, center, 0.0, size)
+    }
+
+    module func sample(randomizer:Randomizer) Math.Vec3 {
+        if self.kind == AreaKind.circle {
+            let radius = self.area_radius * Math.sqrt(randomizer.get_float())
+            let angle = randomizer.get_float() * Math.two_pi()
+            return Math.Vec3(
+                self.area_center.x + Math.cos(angle) * radius,
+                self.area_center.y,
+                self.area_center.z + Math.sin(angle) * radius
+            )
+        }
+        return Math.Vec3(
+            sample_range(
+                randomizer,
+                self.area_center.x - self.area_size.x * 0.5,
+                self.area_center.x + self.area_size.x * 0.5
+            ),
+            self.area_center.y,
+            sample_range(
+                randomizer,
+                self.area_center.z - self.area_size.y * 0.5,
+                self.area_center.z + self.area_size.y * 0.5
+            )
+        )
+    }
+
+    module func contains(position:Math.Vec3) bool {
+        let offset_x = position.x - self.area_center.x
+        let offset_z = position.z - self.area_center.z
+        if self.kind == AreaKind.circle {
+            return offset_x * offset_x + offset_z * offset_z <=
+                self.area_radius * self.area_radius
+        }
+        return Math.abs(offset_x) <= self.area_size.x * 0.5 &&
+            Math.abs(offset_z) <= self.area_size.y * 0.5
+    }
+
+    module func normalized_distance(position:Math.Vec3) float {
+        let offset_x = Math.abs(position.x - self.area_center.x)
+        let offset_z = Math.abs(position.z - self.area_center.z)
+        if self.kind == AreaKind.circle {
+            return Math.clamp(
+                Math.sqrt(offset_x * offset_x + offset_z * offset_z) /
+                    self.area_radius,
+                0.0,
+                1.0
+            )
+        }
+        return Math.clamp(
+            Math.max(
+                offset_x / (self.area_size.x * 0.5),
+                offset_z / (self.area_size.y * 0.5)
+            ),
+            0.0,
+            1.0
+        )
+    }
+}
+
+public class Scatter {
+    private let requested_count:int
+    private let random_seed:int
+    private let spawn_area:ScatterArea
+    private var excluded_areas:ScatterArea[]
+    private var position_minimum:Math.Vec3
+    private var position_maximum:Math.Vec3
+    private var rotation_minimum:Math.Vec3
+    private var rotation_maximum:Math.Vec3
+    private var scale_minimum:Math.Vec3
+    private var scale_maximum:Math.Vec3
+    private var uniform_scale:bool
+    private var edge_softness:float
+    private var center_scale:float
+    private var edge_scale:float
+
+    init(count:int, area:ScatterArea, seed:int = 0) {
+        if count < 0 { panic("GFX.Scene3D scatter count must not be negative") }
+        self.requested_count = count
+        self.random_seed = seed
+        self.spawn_area = area
+        self.excluded_areas = []
+        self.position_minimum = Math.Vec3()
+        self.position_maximum = Math.Vec3()
+        self.rotation_minimum = Math.Vec3()
+        self.rotation_maximum = Math.Vec3()
+        self.scale_minimum = Math.Vec3(1.0)
+        self.scale_maximum = Math.Vec3(1.0)
+        self.uniform_scale = false
+        self.edge_softness = 0.0
+        self.center_scale = 1.0
+        self.edge_scale = 1.0
+    }
+
+    func exclude(area:ScatterArea) {
+        self.excluded_areas.append(area)
+    }
+
+    func vary_position(minimum:Math.Vec3, maximum:Math.Vec3) {
+        require_ordered(minimum, maximum, "position")
+        self.position_minimum = minimum
+        self.position_maximum = maximum
+    }
+
+    func vary_rotation(minimum:Math.Vec3, maximum:Math.Vec3) {
+        require_ordered(minimum, maximum, "rotation")
+        self.rotation_minimum = minimum
+        self.rotation_maximum = maximum
+    }
+
+    func vary_scale(minimum:Math.Vec3, maximum:Math.Vec3) {
+        require_ordered(minimum, maximum, "scale")
+        self.scale_minimum = minimum
+        self.scale_maximum = maximum
+        self.uniform_scale = false
+    }
+
+    func vary_uniform_scale(minimum:float, maximum:float) {
+        if minimum > maximum {
+            panic("GFX.Scene3D scatter scale minimum must not exceed its maximum")
+        }
+        self.scale_minimum = Math.Vec3(minimum)
+        self.scale_maximum = Math.Vec3(maximum)
+        self.uniform_scale = true
+    }
+
+    func soften_edges(amount:float) {
+        if amount < 0.0 || amount > 1.0 {
+            panic("GFX.Scene3D scatter edge softness must be between zero and one")
+        }
+        self.edge_softness = amount
+    }
+
+    func scale_toward_edge(center:float, edge:float) {
+        self.center_scale = center
+        self.edge_scale = edge
+    }
+
+    func generate() Transform[] {
+        var randomizer = Randomizer(self.random_seed)
+        var transforms:Transform[] = []
+        var index = 0
+        while index < self.requested_count {
+            if let position = self.accepted_position(randomizer) {
+                let offset = sample_vector(
+                    randomizer,
+                    self.position_minimum,
+                    self.position_maximum
+                )
+                let angles = sample_vector(
+                    randomizer,
+                    self.rotation_minimum,
+                    self.rotation_maximum
+                )
+                var scale = self.sample_scale(randomizer)
+                let distance = self.spawn_area.normalized_distance(position)
+                scale = scale.multiply(Math.lerp(
+                    self.center_scale,
+                    self.edge_scale,
+                    distance
+                ))
+                transforms.append(Transform(
+                    position:position.add(offset),
+                    rotation:scatter_rotation(angles),
+                    scale:scale
+                ))
+            }
+            index++
+        }
+        return transforms
+    }
+
+    private func accepted_position(randomizer:Randomizer) Math.Vec3? {
+        var attempt = 0
+        while attempt < 64 {
+            let position = self.spawn_area.sample(randomizer)
+            if !is_excluded(position, self.excluded_areas) {
+                let distance = self.spawn_area.normalized_distance(position)
+                let keep_probability = 1.0 - self.edge_softness * distance
+                if randomizer.get_float() <= keep_probability {
+                    return position
+                }
+            }
+            attempt++
+        }
+        return null
+    }
+
+    private func sample_scale(randomizer:Randomizer) Math.Vec3 {
+        if self.uniform_scale {
+            return Math.Vec3(sample_range(
+                randomizer,
+                self.scale_minimum.x,
+                self.scale_maximum.x
+            ))
+        }
+        return sample_vector(randomizer, self.scale_minimum, self.scale_maximum)
+    }
+}
+
+func require_ordered(minimum:Math.Vec3, maximum:Math.Vec3, name:str) {
+    if minimum.x > maximum.x || minimum.y > maximum.y || minimum.z > maximum.z {
+        panic("GFX.Scene3D scatter " + name + " minimum must not exceed its maximum")
+    }
+}
+
+func sample_range(randomizer:Randomizer, minimum:float, maximum:float) float {
+    if minimum == maximum { return minimum }
+    while true {
+        let value = minimum + randomizer.get_float() * (maximum - minimum)
+        if value < maximum { return value }
+    }
+    panic("GFX.Scene3D scatter could not sample a configured range")
+}
+
+func sample_vector(
+    randomizer:Randomizer,
+    minimum:Math.Vec3,
+    maximum:Math.Vec3
+) Math.Vec3 {
+    return Math.Vec3(
+        sample_range(randomizer, minimum.x, maximum.x),
+        sample_range(randomizer, minimum.y, maximum.y),
+        sample_range(randomizer, minimum.z, maximum.z)
+    )
+}
+
+func is_excluded(position:Math.Vec3, areas:ScatterArea[]) bool {
+    for area in areas {
+        if area.contains(position) { return true }
+    }
+    return false
+}
+
+func scatter_rotation(angles:Math.Vec3) Math.Quat {
+    return Math.Quat.angle_axis(angles.y, Math.Vec3.up())
+        .multiply(Math.Quat.angle_axis(angles.x, Math.Vec3.right()))
+        .multiply(Math.Quat.angle_axis(angles.z, Math.Vec3.front()))
+}

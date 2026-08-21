@@ -1,0 +1,13 @@
+use GFX.Color
+
+public struct CubeProjectorLightGizmo {
+    var color:Color
+    var show_falloff:bool
+    var visible:bool
+
+    init(color:Color = Color.gizmos(), visible:bool = true) {
+        self.color = color
+        self.show_falloff = true
+        self.visible = visible
+    }
+}

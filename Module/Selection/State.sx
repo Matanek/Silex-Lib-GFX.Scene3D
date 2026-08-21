@@ -1,0 +1,19 @@
+use GFX.ECS
+
+public class State {
+    private var current:ECS.Entity
+
+    init() { self.current = ECS.Entity() }
+
+    func entity() ECS.Entity { return self.current }
+    func has_selection() bool { return self.current.is_valid() }
+
+    func clear() { self.current = ECS.Entity() }
+
+    func select(entity:ECS.Entity) { self.current = entity }
+
+    func toggle(entity:ECS.Entity) {
+        if self.current == entity { self.clear() }
+        else { self.select(entity) }
+    }
+}

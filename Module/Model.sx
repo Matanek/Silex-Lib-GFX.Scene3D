@@ -1,0 +1,154 @@
+use GFX.Assets.Image
+use GFX.Assets.Model
+use GFX.ECS
+use GFX.Scene3D.Geometry
+use GFX.Scene3D.Material.AlphaMode as SceneAlphaMode
+use GFX.Scene3D.Material.Material
+use GFX.Scene3D.Material.MaterialSettings
+use GFX.Scene3D.Material.MaterialTexture
+use GFX.Scene3D.Material.MaterialTextures
+use GFX.Scene3D.Mesh.Mesh as SceneMesh
+use GFX.Scene3D.MeshHandle
+use GFX.Scene3D.Meshes
+use GFX.Scene3D.Transform
+
+public struct ModelInstance {
+    let entities:ECS.Entity[]
+    let roots:ECS.Entity[]
+}
+
+public func instantiate(
+    model:Model,
+    world:&ECS.World,
+    meshes:&Meshes,
+    images:&Image.Store
+) ModelInstance {
+    var handles:MeshHandle[] = []
+    var geometry_index = 0
+    while geometry_index < model.mesh_count() {
+        handles.append(meshes.add(scene_geometry(model.mesh(geometry_index))))
+        geometry_index++
+    }
+    var image_handles:Image.Handle[] = []
+    var image_index = 0
+    while image_index < model.image_count() {
+        image_handles.append(images.add(model.image(image_index)))
+        image_index++
+    }
+    var entities:ECS.Entity[] = []
+    var roots:ECS.Entity[] = []
+    var node_index = 0
+    while node_index < model.node_count() {
+        let node = model.node(node_index)
+        if node.mesh >= 0 {
+            let model_mesh = model.model_mesh(node.mesh)
+            for primitive in model_mesh.primitives {
+                var material = Material()
+                var textures = MaterialTextures()
+                var alpha = SceneAlphaMode.opaque
+                var alpha_cutoff = 0.5
+                var double_sided = false
+                var unlit = false
+                if primitive.material >= 0 {
+                    let source = model.material(primitive.material)
+                    material = Material(
+                        albedo:source.albedo,
+                        metallic:source.metallic,
+                        roughness:source.roughness,
+                        occlusion:source.occlusion * source.textures.occlusion_strength,
+                        emission:source.emission,
+                        emission_intensity:source.emission_intensity
+                    )
+                    textures = MaterialTextures(
+                        albedo:material_texture(source.textures.albedo, image_handles),
+                        normal:material_texture(source.textures.normal, image_handles),
+                        metallic_roughness:material_texture(
+                            source.textures.metallic_roughness,
+                            image_handles
+                        ),
+                        occlusion:material_texture(source.textures.occlusion, image_handles),
+                        emission:material_texture(source.textures.emission, image_handles),
+                        normal_scale:source.textures.normal_scale
+                    )
+                    alpha = scene_alpha(source.alpha_mode)
+                    alpha_cutoff = source.alpha_cutoff
+                    double_sided = source.double_sided
+                    unlit = source.unlit
+                }
+                var recipe = ECS.EntityRecipe()
+                    ..with(scene_transform(node.world_transform))
+                    ..with(SceneMesh(handles[primitive.mesh]))
+                    ..with(material)
+                if has_textures(textures) || alpha != SceneAlphaMode.opaque ||
+                    double_sided || unlit
+                {
+                    recipe.with(MaterialSettings(
+                        textures:textures,
+                        alpha:alpha,
+                        alpha_cutoff:alpha_cutoff,
+                        double_sided:double_sided,
+                        unlit:unlit
+                    ))
+                }
+                let entity = world.spawn(recipe)
+                entities.append(entity)
+                if node.parent < 0 { roots.append(entity) }
+            }
+        }
+        node_index++
+    }
+    return ModelInstance(entities:entities, roots:roots)
+}
+
+func scene_geometry(source:Model.Geometry) Geometry.Mesh {
+    var vertices:Geometry.Vertex[] = []
+    for vertex in source.vertices() {
+        vertices.append(Geometry.Vertex(
+            position:vertex.position,
+            normal:vertex.normal,
+            uv:vertex.uv,
+            color:vertex.color
+        ))
+    }
+    return Geometry.Mesh(vertices, source.indices())
+}
+
+func scene_transform(source:Model.Transform) Transform {
+    return Transform(
+        position:source.position,
+        rotation:source.rotation,
+        scale:source.scale
+    )
+}
+
+func material_texture(
+    value:Model.TextureReference?,
+    images:Image.Handle[]
+) MaterialTexture? {
+    if let reference = value {
+        if reference.transform.coordinates != 0 {
+            panic("GFX.Scene3D materials currently support texture coordinate set 0")
+        }
+        return MaterialTexture(
+            image:images[reference.image],
+            offset:reference.transform.offset,
+            scale:reference.transform.scale,
+            rotation:reference.transform.rotation
+        )
+    }
+    return null
+}
+
+func has_textures(value:MaterialTextures) bool {
+    return value.albedo != null || value.normal != null ||
+        value.metallic_roughness != null || value.occlusion != null ||
+        value.emission != null
+}
+
+func scene_alpha(value:Model.AlphaMode) SceneAlphaMode {
+    return match value {
+        opaque => SceneAlphaMode.opaque
+        mask => SceneAlphaMode.mask
+        blend => SceneAlphaMode.blend
+    }
+}

@@ -1,0 +1,38 @@
+use GFX.Scene3D.ViewportCamera.Controller
+use GFX.Scene3D.ViewportCamera.View
+use GFX.Scene3D.ViewportCamera.ViewportCamera as ViewportCameraPlugin
+use STD.Math
+
+test "derive a reusable 3D viewport camera pose from target and distance" {
+    let settings = ViewportCameraPlugin.Settings(
+        target:Math.Vec3(0.0, 0.55, 0.0),
+        distance:5.0,
+        pitch:Math.radians(-18.0),
+        vertical_fov:Math.radians(42.0),
+        near_plane:0.05,
+        far_plane:80.0
+    )
+    var camera = Controller(settings)
+    let transform = camera.transform()
+    assert(transform.forward().nearly_equal(
+        settings.target.subtract(transform.position).normalized(),
+        0.0001
+    ))
+}
+
+test "switch a 3D viewport camera between axial and perspective views" {
+    var controller = Controller(ViewportCameraPlugin.Settings(distance:5.0))
+    controller.set_view(View.right)
+    assert(controller.view() == View.right)
+    let camera = controller.camera()
+    assert(camera.is_orthographic())
+    controller.orbit(Math.Vec2(4.0, -2.0))
+    assert(controller.view() == View.perspective)
+    assert(!controller.camera().is_orthographic())
+}
+
+test "pan a 3D viewport camera in its view plane" {
+    var camera = Controller(ViewportCameraPlugin.Settings(distance:5.0, pitch:0.0, pan_sensitivity:0.1))
+    camera.pan(Math.Vec2(4.0, -2.0))
+    assert(camera.target().nearly_equal(Math.Vec3(-2.0, -1.0, 0.0), 0.0001))
+}

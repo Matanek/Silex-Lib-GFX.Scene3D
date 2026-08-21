@@ -1,0 +1,210 @@
+public enum Operator:int {
+    none = 0
+    reinhard = 1
+    aces = 2
+    neutral = 3
+    filmic = 4
+    agx = 5
+}
+
+public enum FilmicLook:int {
+    very_low_contrast = 0
+    low_contrast = 1
+    medium_low_contrast = 2
+    medium_contrast = 3
+    medium_high_contrast = 4
+    high_contrast = 5
+    very_high_contrast = 6
+}
+
+public enum AgXLook:int {
+    very_low_contrast = 0
+    low_contrast = 1
+    medium_low_contrast = 2
+    base_contrast = 3
+    medium_high_contrast = 4
+    high_contrast = 5
+    very_high_contrast = 6
+}
+
+public enum Normalization:int {
+    reference = 0
+    middle_gray = 1
+}
+
+// Bundled lookup tables used by the Scene3D mesh shader. They remain public so
+// an alternative renderer can reuse GFX's validated color transforms.
+public struct Tables {
+    private let agx_base_bytes:uint8[]
+    private let neutral_bytes:uint8[]
+    private let filmic_desaturation_bytes:uint8[]
+    private let filmic_looks_bytes:uint8[]
+
+    private init(
+        agx_base:uint8[],
+        neutral:uint8[],
+        filmic_desaturation:uint8[],
+        filmic_looks:uint8[]
+    ) {
+        self.agx_base_bytes = agx_base
+        self.neutral_bytes = neutral
+        self.filmic_desaturation_bytes = filmic_desaturation
+        self.filmic_looks_bytes = filmic_looks
+    }
+
+    static func bundled() Tables {
+        return Tables(
+            embed_bytes("../Assets/ToneMapping/AgXBase.rgba16f"),
+            embed_bytes("../Assets/ToneMapping/PBRNeutral.rgba16f"),
+            embed_bytes("../Assets/ToneMapping/FilmicDesaturation.rgba16f"),
+            embed_bytes("../Assets/ToneMapping/FilmicLooks.rgba16f")
+        )
+    }
+
+    func agx_base() @self:uint8[..] {
+        return @self.agx_base_bytes[0:self.agx_base_bytes.count()]
+    }
+
+    func neutral() @self:uint8[..] {
+        return @self.neutral_bytes[0:self.neutral_bytes.count()]
+    }
+
+    func filmic_desaturation() @self:uint8[..] {
+        return @self.filmic_desaturation_bytes[0:self.filmic_desaturation_bytes.count()]
+    }
+
+    func filmic_looks() @self:uint8[..] {
+        return @self.filmic_looks_bytes[0:self.filmic_looks_bytes.count()]
+    }
+
+    func agx_base_byte_count() int { return self.agx_base_bytes.count() }
+    func neutral_byte_count() int { return self.neutral_bytes.count() }
+    func filmic_desaturation_byte_count() int {
+        return self.filmic_desaturation_bytes.count()
+    }
+    func filmic_looks_byte_count() int {
+        return self.filmic_looks_bytes.count()
+    }
+
+    static func agx_size() int { return 57 }
+    static func neutral_size() int { return 57 }
+    static func filmic_desaturation_size() int { return 33 }
+    static func filmic_look_width() int { return 4096 }
+    static func filmic_look_count() int { return 7 }
+}
+
+public struct ToneMapping {
+    var method:Operator
+    var filmic_look:FilmicLook
+    var agx_look:AgXLook
+    var normalization:Normalization
+    var exposure:float
+    var white_point:float
+    var split_comparison:bool
+    var split_position:float
+
+    init(
+        method:Operator = Operator.none,
+        filmic_look:FilmicLook = FilmicLook.medium_high_contrast,
+        agx_look:AgXLook = AgXLook.base_contrast,
+        normalization:Normalization = Normalization.reference,
+        exposure:float = 0.0,
+        white_point:float = 16.0,
+        split_comparison:bool = false,
+        split_position:float = 0.5
+    ) {
+        self.method = method
+        self.filmic_look = filmic_look
+        self.agx_look = agx_look
+        self.normalization = normalization
+        self.exposure = exposure
+        self.white_point = white_point
+        self.split_comparison = split_comparison
+        self.split_position = split_position
+    }
+
+    static func none() ToneMapping {
+        return ToneMapping()
+    }
+
+    static func reinhard(
+        exposure:float = 0.0,
+        white_point:float = 16.0,
+        normalization:Normalization = Normalization.reference,
+        split_comparison:bool = false,
+        split_position:float = 0.5
+    ) ToneMapping {
+        return ToneMapping(
+            method:Operator.reinhard,
+            normalization:normalization,
+            exposure:exposure,
+            white_point:white_point,
+            split_comparison:split_comparison,
+            split_position:split_position
+        )
+    }
+
+    static func aces(
+        exposure:float = 0.0,
+        normalization:Normalization = Normalization.reference,
+        split_comparison:bool = false,
+        split_position:float = 0.5
+    ) ToneMapping {
+        return ToneMapping(
+            method:Operator.aces,
+            normalization:normalization,
+            exposure:exposure,
+            split_comparison:split_comparison,
+            split_position:split_position
+        )
+    }
+
+    static func neutral(
+        exposure:float = 0.0,
+        normalization:Normalization = Normalization.reference,
+        split_comparison:bool = false,
+        split_position:float = 0.5
+    ) ToneMapping {
+        return ToneMapping(
+            method:Operator.neutral,
+            normalization:normalization,
+            exposure:exposure,
+            split_comparison:split_comparison,
+            split_position:split_position
+        )
+    }
+
+    static func filmic(
+        look:FilmicLook = FilmicLook.medium_high_contrast,
+        exposure:float = 0.0,
+        normalization:Normalization = Normalization.reference,
+        split_comparison:bool = false,
+        split_position:float = 0.5
+    ) ToneMapping {
+        return ToneMapping(
+            method:Operator.filmic,
+            filmic_look:look,
+            normalization:normalization,
+            exposure:exposure,
+            split_comparison:split_comparison,
+            split_position:split_position
+        )
+    }
+
+    static func agx(
+        look:AgXLook = AgXLook.base_contrast,
+        exposure:float = 0.0,
+        normalization:Normalization = Normalization.reference,
+        split_comparison:bool = false,
+        split_position:float = 0.5
+    ) ToneMapping {
+        return ToneMapping(
+            method:Operator.agx,
+            agx_look:look,
+            normalization:normalization,
+            exposure:exposure,
+            split_comparison:split_comparison,
+            split_position:split_position
+        )
+    }
+}

@@ -1,0 +1,17 @@
+use GFX.ECS
+use GFX.Scene3D.Selection
+use GFX.Scene3D.TransformGizmo
+
+test "keep selection and transform gizmo inside the Scene3D domain" {
+    var world = ECS.World()
+    let entity = world.spawn(ECS.EntityRecipe())
+    var selection = Selection.State()
+    selection.select(entity)
+    assert(selection.entity() == entity)
+
+    var gizmo = TransformGizmo.Controller()
+    gizmo.set_mode(TransformGizmo.Mode.rotate)
+    gizmo.set_space(TransformGizmo.Space.local_space)
+    assert(gizmo.mode() == TransformGizmo.Mode.rotate)
+    assert(gizmo.space() == TransformGizmo.Space.local_space)
+}

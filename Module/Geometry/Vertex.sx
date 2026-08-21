@@ -1,0 +1,21 @@
+use GFX.Color
+use STD.Math
+
+public struct Vertex {
+    var position:Math.Vec3
+    var normal:Math.Vec3
+    var uv:Math.Vec2
+    var color:Color
+
+    init(
+        position:Math.Vec3 = Math.Vec3(),
+        normal:Math.Vec3 = Math.Vec3.back(),
+        uv:Math.Vec2 = Math.Vec2(),
+        color:Color = Color.white()
+    ) {
+        self.position = position
+        self.normal = normal
+        self.uv = uv
+        self.color = color
+    }
+}

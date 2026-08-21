@@ -1,0 +1,29 @@
+use GFX.Scene3D.MeshHandle
+
+public struct Mesh {
+    var asset:MeshHandle
+    var visible:bool
+    var casts_shadows:bool
+    var shadow_distance:float
+    var shadow_cascades:int
+
+    init(
+        asset:MeshHandle = MeshHandle(),
+        visible:bool = true,
+        casts_shadows:bool = true,
+        shadow_distance:float = 0.0,
+        shadow_cascades:int = 4
+    ) {
+        if shadow_distance < 0.0 {
+            panic("GFX.Scene3D mesh shadow distance must not be negative")
+        }
+        if shadow_cascades < 1 || shadow_cascades > 4 {
+            panic("GFX.Scene3D mesh shadow cascades must be between one and four")
+        }
+        self.asset = asset
+        self.visible = visible
+        self.casts_shadows = casts_shadows
+        self.shadow_distance = shadow_distance
+        self.shadow_cascades = shadow_cascades
+    }
+}

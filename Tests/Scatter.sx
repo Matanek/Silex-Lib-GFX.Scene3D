@@ -1,0 +1,101 @@
+use GFX.ECS
+use GFX.Scene3D
+use STD.Math
+
+func configured_scatter() Scene3D.Scatter {
+    var scatter = Scene3D.Scatter(
+        count:64,
+        area:Scene3D.ScatterArea.box(
+            Math.Vec2(20.0, 12.0),
+            Math.Vec3(3.0, 1.0, -4.0)
+        ),
+        seed:42
+    )
+    scatter.exclude(Scene3D.ScatterArea.circle(
+        2.0,
+        Math.Vec3(3.0, 1.0, -4.0)
+    ))
+    scatter.vary_position(Math.Vec3(-0.1), Math.Vec3(0.1))
+    scatter.vary_rotation(Math.Vec3(), Math.Vec3(0.2, Math.two_pi(), 0.2))
+    scatter.vary_scale(Math.Vec3(0.4, 0.3, 0.5), Math.Vec3(1.8, 1.4, 2.0))
+    scatter.soften_edges(0.35)
+    scatter.scale_toward_edge(1.0, 0.6)
+    return scatter
+}
+
+func same_transform(left:Scene3D.Transform, right:Scene3D.Transform) bool {
+    return left.position.x == right.position.x &&
+        left.position.y == right.position.y &&
+        left.position.z == right.position.z &&
+        left.rotation.x == right.rotation.x &&
+        left.rotation.y == right.rotation.y &&
+        left.rotation.z == right.rotation.z &&
+        left.rotation.w == right.rotation.w &&
+        left.scale.x == right.scale.x &&
+        left.scale.y == right.scale.y &&
+        left.scale.z == right.scale.z
+}
+
+test "generate deterministic varied transforms" {
+    let first = configured_scatter().generate()
+    let second = configured_scatter().generate()
+
+    assert(first.count() == 64)
+    assert(second.count() == first.count())
+    var index = 0
+    while index < first.count() {
+        assert(same_transform(first[index], second[index]))
+        index++
+    }
+}
+
+test "respect circular areas exclusions and uniform scale" {
+    var scatter = Scene3D.Scatter(
+        count:200,
+        area:Scene3D.ScatterArea.circle(20.0),
+        seed:77
+    )
+    scatter.exclude(Scene3D.ScatterArea.circle(5.0))
+    scatter.vary_uniform_scale(0.5, 1.5)
+    let transforms = scatter.generate()
+
+    assert(transforms.count() == 200)
+    for transform in transforms {
+        let distance = Math.sqrt(
+            transform.position.x * transform.position.x +
+            transform.position.z * transform.position.z
+        )
+        assert(distance > 5.0)
+        assert(distance <= 20.0)
+        assert(transform.position.y == 0.0)
+        assert(transform.scale.x >= 0.5 && transform.scale.x < 1.5)
+        assert(transform.scale.x == transform.scale.y)
+        assert(transform.scale.y == transform.scale.z)
+    }
+}
+
+test "feed scatter transforms into ordinary ECS recipes" {
+    var world = ECS.World()
+    var scatter = Scene3D.Scatter(
+        count:24,
+        area:Scene3D.ScatterArea.box(Math.Vec2(8.0)),
+        seed:19
+    )
+    scatter.vary_rotation(Math.Vec3(), Math.Vec3(0.0, Math.two_pi(), 0.0))
+    scatter.vary_uniform_scale(0.8, 1.2)
+
+    for transform in scatter.generate() {
+        world.spawn(ECS.EntityRecipe()
+            ..with(transform)
+            ..with(Scene3D.Material())
+        )
+    }
+
+    var count = 0
+    for entity in world.entities() {
+        if world.has<Scene3D.Transform>(entity) && world.has<Scene3D.Material>(entity) {
+            count++
+        }
+    }
+    assert(count == 24)
+}

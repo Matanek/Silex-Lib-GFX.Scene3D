@@ -1,0 +1,261 @@
+use GFX.Application
+use GFX.Color
+use GFX.ECS
+use GFX.Plugins
+use GFX.Rendering
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+struct Probe {
+    var frames:int
+    var draw_calls:int
+    var render_passes:int
+    var instances:int
+    var triangles:int
+    var color_draw_calls:int
+    var shadow_draw_calls:int
+    var color_instances:int
+    var shadow_instances:int
+    var color_triangles:int
+    var shadow_triangles:int
+}
+
+func inspect_batches(
+    probe:&Probe,
+    renderer:@Rendering.Renderer,
+    controller:&Application.Controller
+) {
+    let stats = renderer.stats()
+    probe.frames++
+    probe.draw_calls = stats.draw_calls()
+    probe.render_passes = stats.render_passes()
+    probe.instances = stats.instances()
+    probe.triangles = stats.triangles()
+    probe.color_draw_calls = stats.color_draw_calls()
+    probe.shadow_draw_calls = stats.shadow_draw_calls()
+    probe.color_instances = stats.color_instances()
+    probe.shadow_instances = stats.shadow_instances()
+    probe.color_triangles = stats.color_triangles()
+    probe.shadow_triangles = stats.shadow_triangles()
+    if probe.frames >= 2 { controller.stop() }
+}
+
+func create_opaque_scene(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    let cube = meshes.add(Scene3D.Geometry.Cube.make())
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 2.0, 10.0)))
+        ..with(Scene3D.Camera())
+    )
+    var index = 0
+    while index < 32 {
+        world.spawn(ECS.EntityRecipe()
+            ..with(Scene3D.Transform(position:Math.Vec3(
+                (index % 8) as float - 3.5,
+                0.0,
+                (index / 8) as float - 1.5
+            )))
+            ..with(Scene3D.Mesh(cube))
+            ..with(Scene3D.Material(albedo:Color.slate_400()))
+        )
+        index++
+    }
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.SunLight(
+            direction:Math.Vec3(-0.5, -1.0, -0.3).normalized()
+        ))
+    )
+}
+
+func create_transparent_scene(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    let cube = meshes.add(Scene3D.Geometry.Cube.make())
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.0, 8.0)))
+        ..with(Scene3D.Camera())
+    )
+    var index = 0
+    while index < 2 {
+        world.spawn(ECS.EntityRecipe()
+            ..with(Scene3D.Transform(position:Math.Vec3(index as float, 0.0, 0.0)))
+            ..with(Scene3D.Mesh(cube))
+            ..with(Scene3D.Material(albedo:Color.blue_400().with_alpha(0.5)))
+            ..with(Scene3D.MaterialSettings(
+                alpha:Scene3D.AlphaMode.blend
+            ))
+        )
+        index++
+    }
+}
+
+func create_world_sized_scene(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    let ground = meshes.add(Scene3D.Geometry.Plane.make(Math.Vec2(100.0)))
+    let cube = meshes.add(Scene3D.Geometry.Cube.make())
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 2.0, 10.0)))
+        ..with(Scene3D.Camera(far_plane:180.0))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(rotation:Math.Quat.angle_axis(
+            Math.radians(-90.0),
+            Math.Vec3.right()
+        )))
+        ..with(Scene3D.Mesh(ground))
+        ..with(Scene3D.Material(roughness:0.9))
+    )
+    var index = 0
+    while index < 140 {
+        world.spawn(ECS.EntityRecipe()
+            ..with(Scene3D.Transform(position:Math.Vec3(
+                (index % 14) as float - 6.5,
+                0.5,
+                (index / 14) as float - 4.5
+            )))
+            ..with(Scene3D.Mesh(cube))
+            ..with(Scene3D.Material(
+                albedo:Color.slate_400(),
+                roughness:0.92
+            ))
+        )
+        index++
+    }
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.SunLight(
+            direction:Math.Vec3(-0.5, -1.0, -0.3).normalized()
+        ))
+    )
+}
+
+func create_culled_detail_scene(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    let cube = meshes.add(Scene3D.Geometry.Cube.make())
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 2.0, 10.0)))
+        ..with(Scene3D.Camera(far_plane:180.0))
+    )
+    var index = 0
+    while index < 128 {
+        world.spawn(ECS.EntityRecipe()
+            ..with(Scene3D.Transform(position:Math.Vec3(
+                (index % 16) as float * 6.0 - 45.0,
+                0.5,
+                (index / 16) as float * 6.0 - 21.0
+            )))
+            ..with(Scene3D.Mesh(
+                cube,
+                shadow_distance:20.0,
+                shadow_cascades:1
+            ))
+            ..with(Scene3D.Material(albedo:Color.green_400()))
+        )
+        index++
+    }
+    var sun = Scene3D.SunLight(
+        direction:Math.Vec3(-0.5, -1.0, -0.3).normalized()
+    )
+    sun.shadow_distance = 45.0
+    world.spawn(ECS.EntityRecipe()..with(sun))
+}
+
+func test_application(title:str) Application {
+    return Application()
+        ..add_plugin(WindowPlugin(WindowPlugin.Settings()
+            ..title = title
+            ..width = 64
+            ..height = 64
+            ..hidden = true
+        ))
+        ..add_plugin(Scene3D.Plugin())
+        ..add_after_system(Application.Schedule.render, inspect_batches)
+}
+
+test "batch identical opaque meshes and cull empty sun shadow cascades" {
+    var application = test_application("Scene3D opaque batching")
+        ..add_system(Application.Schedule.startup, create_opaque_scene)
+    var resources = application.resources()
+    resources.insert(Probe(
+        frames:0, draw_calls:0, render_passes:0, instances:0, triangles:0,
+        color_draw_calls:0, shadow_draw_calls:0,
+        color_instances:0, shadow_instances:0,
+        color_triangles:0, shadow_triangles:0
+    ))
+
+    assert(application.run() == 0)
+    let probe = resources.get<Probe>()
+    assert(probe.frames == 2)
+    assert(probe.draw_calls == probe.color_draw_calls + probe.shadow_draw_calls)
+    assert(probe.render_passes == 2)
+    assert(probe.color_draw_calls == 1)
+    assert(probe.shadow_draw_calls > 0)
+    assert(probe.shadow_draw_calls < 4)
+    assert(probe.color_instances == 32)
+    assert(probe.shadow_instances == probe.shadow_draw_calls * 32)
+    assert(probe.instances == probe.color_instances + probe.shadow_instances)
+    assert(probe.color_triangles == 384)
+    assert(probe.shadow_triangles == probe.shadow_instances * 12)
+    assert(probe.triangles == probe.color_triangles + probe.shadow_triangles)
+}
+
+test "preserve transparent ordering with singleton batches" {
+    var application = test_application("Scene3D transparent batching")
+        ..add_system(Application.Schedule.startup, create_transparent_scene)
+    var resources = application.resources()
+    resources.insert(Probe(
+        frames:0, draw_calls:0, render_passes:0, instances:0, triangles:0,
+        color_draw_calls:0, shadow_draw_calls:0,
+        color_instances:0, shadow_instances:0,
+        color_triangles:0, shadow_triangles:0
+    ))
+
+    assert(application.run() == 0)
+    let probe = resources.get<Probe>()
+    assert(probe.frames == 2)
+    assert(probe.draw_calls == 2)
+    assert(probe.render_passes == 1)
+    assert(probe.instances == 2)
+    assert(probe.triangles == 24)
+    assert(probe.color_draw_calls == 2)
+    assert(probe.shadow_draw_calls == 0)
+    assert(probe.color_triangles == 24)
+    assert(probe.shadow_triangles == 0)
+}
+
+test "keep a world-sized repeated field below fourteen cascaded draw calls" {
+    var application = test_application("Scene3D world batching")
+        ..add_system(Application.Schedule.startup, create_world_sized_scene)
+    var resources = application.resources()
+    resources.insert(Probe(
+        frames:0, draw_calls:0, render_passes:0, instances:0, triangles:0,
+        color_draw_calls:0, shadow_draw_calls:0,
+        color_instances:0, shadow_instances:0,
+        color_triangles:0, shadow_triangles:0
+    ))
+
+    assert(application.run() == 0)
+    let probe = resources.get<Probe>()
+    assert(probe.frames == 2)
+    assert(probe.draw_calls <= 14)
+    assert(probe.render_passes == 2)
+    assert(probe.instances >= 705)
+    assert(probe.triangles >= 8410)
+}
+
+test "cull spatial detail batches and limit them to nearby shadow cascades" {
+    var application = test_application("Scene3D detail culling")
+        ..add_system(Application.Schedule.startup, create_culled_detail_scene)
+    var resources = application.resources()
+    resources.insert(Probe(
+        frames:0, draw_calls:0, render_passes:0, instances:0, triangles:0,
+        color_draw_calls:0, shadow_draw_calls:0,
+        color_instances:0, shadow_instances:0,
+        color_triangles:0, shadow_triangles:0
+    ))
+
+    assert(application.run() == 0)
+    let probe = resources.get<Probe>()
+    assert(probe.frames == 2)
+    assert(probe.color_instances > 0)
+    assert(probe.color_instances < 128)
+    assert(probe.shadow_instances > 0)
+    assert(probe.shadow_instances < 128)
+    assert(probe.shadow_triangles == probe.shadow_instances * 12)
+    assert(probe.shadow_draw_calls < probe.color_draw_calls * 4)
+}

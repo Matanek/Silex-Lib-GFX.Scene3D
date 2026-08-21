@@ -1,0 +1,75 @@
+use GFX.Application
+use GFX.Assets.Image
+use GFX.Assets.Model
+use GFX.Assets.GLTF
+use GFX.ECS
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+func create_textured_scene(
+    world:&ECS.World,
+    meshes:&Scene3D.Meshes,
+    images:&Image.Store
+) {
+    let model = GLTF.decode(
+        embed_bytes("../Assets/Models/Grass.glb"),
+        GLTF.Format.glb
+    )
+    let instance = Scene3D.instantiate(model, world, meshes, images)
+    assert(instance.entities.count() > 0)
+    let vertices:Model.Vertex[] = [
+        Model.Vertex(position:Math.Vec3(-0.5, -0.5, 0.0)),
+        Model.Vertex(position:Math.Vec3(0.5, -0.5, 0.0)),
+        Model.Vertex(position:Math.Vec3(0.0, 0.5, 0.0))
+    ]
+    let indices:uint32[] = [0, 1, 2]
+    var transparent_material = Model.Material()
+    transparent_material.alpha_mode = Model.AlphaMode.blend
+    let transparent_model = Model.from_geometry(
+        Model.Geometry(vertices, indices),
+        transparent_material,
+        "Transparent triangle"
+    )
+    let transparent = Scene3D.instantiate(
+        transparent_model,
+        world,
+        meshes,
+        images
+    )
+    assert(transparent.entities.count() == 1)
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 3.0, 8.0)))
+        ..with(Scene3D.Camera(near_plane:0.05, far_plane:80.0))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.AmbientLight(intensity:0.12))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.SunLight(
+            direction:Math.Vec3(-0.5, -1.0, -0.4).normalized(),
+            intensity:4.0
+        ))
+    )
+}
+
+func stop_after_pbr_render(controller:&Application.Controller) {
+    controller.stop()
+}
+
+test "render imported PBR textures and alpha materials" {
+    var application = Application()
+    application.add_plugin(WindowPlugin(WindowPlugin.Settings()
+        ..title = "Scene3D PBR integration"
+        ..width = 64
+        ..height = 64
+        ..hidden = true
+    ))
+    application.add_plugin(Scene3D.Plugin())
+    application.add_resource(
+        Scene3D.Skybox.procedural(Scene3D.ProceduralSky.day())
+    )
+    application.add_system(Application.Schedule.startup, create_textured_scene)
+    application.add_after_system(Application.Schedule.render, stop_after_pbr_render)
+    assert(application.run() == 0)
+}

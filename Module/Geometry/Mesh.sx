@@ -1,0 +1,43 @@
+use GFX.Scene3D.Geometry.Vertex as Vertex
+use STD.Math
+
+public struct Mesh {
+    private var current_vertices:Vertex[]
+    private var current_indices:uint32[]
+
+    init(vertices:Vertex[] = [], indices:uint32[] = []) {
+        self.current_vertices = vertices
+        self.current_indices = indices
+        self.validate()
+    }
+
+    func vertices() Vertex[] { return self.current_vertices }
+    func indices() uint32[] { return self.current_indices }
+    func vertex_count() int { return self.current_vertices.count() }
+    func index_count() int { return self.current_indices.count() }
+    func triangle_count() int { return self.current_indices.count() / 3 }
+    func is_empty() bool {
+        return self.current_vertices.count() == 0 || self.current_indices.count() == 0
+    }
+
+    func translated(offset:Math.Vec3) Mesh {
+        var vertices = self.current_vertices
+        var index = 0
+        while index < vertices.count() {
+            vertices[index].position = vertices[index].position.add(offset)
+            index++
+        }
+        return Mesh(vertices, self.current_indices)
+    }
+
+    private func validate() {
+        if self.current_indices.count() % 3 != 0 {
+            panic("GFX.Scene3D.Geometry mesh indices must describe triangles")
+        }
+        for index in self.current_indices {
+            if index as int >= self.current_vertices.count() {
+                panic("GFX.Scene3D.Geometry mesh index is out of bounds")
+            }
+        }
+    }
+}

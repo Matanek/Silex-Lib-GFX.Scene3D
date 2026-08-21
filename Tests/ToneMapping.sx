@@ -1,0 +1,15 @@
+use GFX.Scene3D.ToneMapping as ToneMapping3D
+use GFX.Scene3D.ToneMapping.Operator
+use GFX.Scene3D.ToneMapping.Tables
+
+test "reuse the bundled Scene3D tone-mapping transforms" {
+    let settings = ToneMapping3D.agx(exposure:0.5)
+    assert(settings.method == Operator.agx)
+
+    let tables = Tables.bundled()
+    let texel_bytes = 8
+    assert(tables.agx_base_byte_count() == 57 * 57 * 57 * texel_bytes)
+    assert(tables.neutral_byte_count() == 57 * 57 * 57 * texel_bytes)
+    assert(tables.filmic_desaturation_byte_count() == 33 * 33 * 33 * texel_bytes)
+    assert(tables.filmic_looks_byte_count() == 4096 * 7 * texel_bytes)
+}

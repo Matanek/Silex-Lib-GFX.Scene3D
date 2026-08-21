@@ -1,0 +1,36 @@
+use GFX.Scene3D.Geometry.Mesh as Mesh
+use GFX.Scene3D.Geometry.Vertex as Vertex
+use STD.Math
+
+public static struct Cube {
+    func make(size:Math.Vec3 = Math.Vec3(1.0)) Mesh {
+        let half = size.multiply(0.5)
+        var vertices:Vertex[] = []
+        append_face(vertices, Math.Vec3(-half.x, -half.y, half.z), Math.Vec3(half.x, -half.y, half.z), Math.Vec3(half.x, half.y, half.z), Math.Vec3(-half.x, half.y, half.z), Math.Vec3.back())
+        append_face(vertices, Math.Vec3(half.x, -half.y, -half.z), Math.Vec3(-half.x, -half.y, -half.z), Math.Vec3(-half.x, half.y, -half.z), Math.Vec3(half.x, half.y, -half.z), Math.Vec3.front())
+        append_face(vertices, Math.Vec3(-half.x, -half.y, -half.z), Math.Vec3(-half.x, -half.y, half.z), Math.Vec3(-half.x, half.y, half.z), Math.Vec3(-half.x, half.y, -half.z), Math.Vec3.left())
+        append_face(vertices, Math.Vec3(half.x, -half.y, half.z), Math.Vec3(half.x, -half.y, -half.z), Math.Vec3(half.x, half.y, -half.z), Math.Vec3(half.x, half.y, half.z), Math.Vec3.right())
+        append_face(vertices, Math.Vec3(-half.x, half.y, half.z), Math.Vec3(half.x, half.y, half.z), Math.Vec3(half.x, half.y, -half.z), Math.Vec3(-half.x, half.y, -half.z), Math.Vec3.up())
+        append_face(vertices, Math.Vec3(-half.x, -half.y, -half.z), Math.Vec3(half.x, -half.y, -half.z), Math.Vec3(half.x, -half.y, half.z), Math.Vec3(-half.x, -half.y, half.z), Math.Vec3.down())
+        var indices:uint32[] = []
+        var face:uint32 = 0
+        while face < 6 as uint32 {
+            let offset = face * 4 as uint32
+            indices.append(offset)
+            indices.append(offset + 1 as uint32)
+            indices.append(offset + 2 as uint32)
+            indices.append(offset)
+            indices.append(offset + 2 as uint32)
+            indices.append(offset + 3 as uint32)
+            face++
+        }
+        return Mesh(vertices, indices)
+    }
+}
+
+func append_face(vertices:&Vertex[], a:Math.Vec3, b:Math.Vec3, c:Math.Vec3, d:Math.Vec3, normal:Math.Vec3) {
+    vertices.append(Vertex(a, normal, Math.Vec2(0.0, 1.0)))
+    vertices.append(Vertex(b, normal, Math.Vec2(1.0, 1.0)))
+    vertices.append(Vertex(c, normal, Math.Vec2(1.0, 0.0)))
+    vertices.append(Vertex(d, normal, Math.Vec2(0.0, 0.0)))
+}

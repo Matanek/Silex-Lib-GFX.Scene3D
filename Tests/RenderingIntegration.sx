@@ -1,0 +1,58 @@
+use GFX.Application
+use GFX.Color
+use GFX.ECS
+use GFX.Input.Plugin as InputPlugin
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+func create_scene(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    let cube = meshes.add(Scene3D.Geometry.Cube.make())
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.0, 3.0)))
+        ..with(Scene3D.Camera())
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform())
+        ..with(Scene3D.Mesh(cube))
+        ..with(Scene3D.Material(albedo:Color.red_500()))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.SunLight(direction:Math.Vec3(-0.5, -1.0, -0.3)))
+        ..with(Scene3D.SunLightGizmo())
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(1.0, 1.0, 1.0)))
+        ..with(Scene3D.PointLight(radius:4.0))
+        ..with(Scene3D.PointLightGizmo())
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 2.0, 2.0)))
+        ..with(Scene3D.SpotProjectorLight(
+            direction:Math.Vec3(0.0, -1.0, -1.0).normalized(),
+            reach:1.5
+        )
+            ..falloff = 1.0
+        )
+        ..with(Scene3D.SpotProjectorLightGizmo())
+    )
+}
+
+func stop_after_render(controller:&Application.Controller) {
+    controller.stop()
+}
+
+test "render projected, spot, and point shadows with light gizmos" {
+    var application = Application()
+    application.add_plugin(WindowPlugin(WindowPlugin.Settings()
+        ..title = "Scene3D integration"
+        ..width = 64
+        ..height = 64
+        ..hidden = true
+    ))
+    application.add_plugin(InputPlugin())
+    application.add_plugin(Scene3D.Plugin())
+    application.add_system(Application.Schedule.startup, create_scene)
+    application.add_after_system(Application.Schedule.render, stop_after_render)
+    assert(application.run() == 0)
+}

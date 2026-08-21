@@ -1,0 +1,13 @@
+use GFX.Color
+
+public struct AmbientLight {
+    var color:Color
+    var intensity:float
+    var enabled:bool
+
+    init(color:Color = Color.white(), intensity:float = 0.07, enabled:bool = true) {
+        self.color = color
+        self.intensity = intensity
+        self.enabled = enabled
+    }
+}

@@ -1,0 +1,5 @@
+public struct Rotator {
+    var x_speed:float
+    var y_speed:float
+    var z_speed:float
+}

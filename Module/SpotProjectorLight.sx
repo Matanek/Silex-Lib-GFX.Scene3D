@@ -1,0 +1,38 @@
+use GFX.Color
+use GFX.Scene3D.Shadow as Shadow
+use STD.Math
+
+public struct SpotProjectorLight {
+    var direction:Math.Vec3
+    var color:Color
+    var intensity:float
+    var reach:float
+    var angle:float
+    var softness:float
+    var falloff:float
+    var shadow:Shadow
+    var enabled:bool
+
+    init(
+        direction:Math.Vec3 = Math.Vec3.down(),
+        color:Color = Color.white(),
+        intensity:float = 1.0,
+        reach:float = 6.0,
+        angle:float = Math.radians(18.0),
+        shadow:Shadow = Shadow(
+            bias:0.00008,
+            normal_offset:0.00035
+        ),
+        enabled:bool = true
+    ) {
+        self.direction = direction
+        self.color = color
+        self.intensity = intensity
+        self.reach = reach
+        self.angle = angle
+        self.softness = Math.radians(10.0)
+        self.falloff = 1.0
+        self.shadow = shadow
+        self.enabled = enabled
+    }
+}

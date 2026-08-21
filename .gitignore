@@ -1,0 +1,7 @@
+.silex/
+.DS_Store
+
+# Native archives are restored from the immutable release assets declared in
+# Package.json. Keep their manifests, checksums, patches, and licenses in Git.
+Boundary/*/*.a
+Boundary/*/*.lib

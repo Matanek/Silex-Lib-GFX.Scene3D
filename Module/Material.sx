@@ -1,0 +1,104 @@
+use GFX.Assets.Image
+use GFX.Color
+use STD.Math
+
+public enum AlphaMode {
+    opaque
+    mask
+    blend
+}
+
+public struct MaterialTexture {
+    let image:Image.Handle
+    var offset:Math.Vec2
+    var scale:Math.Vec2
+    var rotation:float
+
+    init(
+        image:Image.Handle,
+        offset:Math.Vec2 = Math.Vec2(),
+        scale:Math.Vec2 = Math.Vec2(1.0),
+        rotation:float = 0.0
+    ) {
+        self.image = image
+        self.offset = offset
+        self.scale = scale
+        self.rotation = rotation
+    }
+}
+
+public struct MaterialTextures {
+    var albedo:MaterialTexture?
+    var normal:MaterialTexture?
+    var metallic_roughness:MaterialTexture?
+    var occlusion:MaterialTexture?
+    var emission:MaterialTexture?
+    var normal_scale:float
+
+    init(
+        albedo:MaterialTexture? = null,
+        normal:MaterialTexture? = null,
+        metallic_roughness:MaterialTexture? = null,
+        occlusion:MaterialTexture? = null,
+        emission:MaterialTexture? = null,
+        normal_scale:float = 1.0
+    ) {
+        self.albedo = albedo
+        self.normal = normal
+        self.metallic_roughness = metallic_roughness
+        self.occlusion = occlusion
+        self.emission = emission
+        self.normal_scale = normal_scale
+    }
+}
+
+public class MaterialSettings {
+    var textures:MaterialTextures
+    var alpha:AlphaMode
+    var alpha_cutoff:float
+    var double_sided:bool
+    var unlit:bool
+
+    init(
+        textures:MaterialTextures = MaterialTextures(),
+        alpha:AlphaMode = AlphaMode.opaque,
+        alpha_cutoff:float = 0.5,
+        double_sided:bool = false,
+        unlit:bool = false
+    ) {
+        self.textures = textures
+        self.alpha = alpha
+        self.alpha_cutoff = alpha_cutoff
+        self.double_sided = double_sided
+        self.unlit = unlit
+    }
+}
+
+public struct Material {
+    var albedo:Color
+    var metallic:float
+    var roughness:float
+    var occlusion:float
+    var emission:Color
+    var emission_intensity:float
+
+    init(
+        albedo:Color = Color.white(),
+        metallic:float = 0.0,
+        roughness:float = 0.5,
+        occlusion:float = 1.0,
+        emission:Color = Color.black(),
+        emission_intensity:float = 0.0
+    ) {
+        self.albedo = albedo
+        self.metallic = metallic
+        self.roughness = roughness
+        self.occlusion = occlusion
+        self.emission = emission
+        self.emission_intensity = emission_intensity
+    }
+
+    static func unlit(color:Color = Color.white()) Material {
+        return Material(albedo:color, roughness:1.0)
+    }
+}

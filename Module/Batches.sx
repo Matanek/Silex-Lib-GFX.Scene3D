@@ -1,0 +1,329 @@
+use GFX.GPU
+use GFX.Scene3D.Material
+use STD.Math
+
+package struct DrawSettings {
+    let alpha:GFX.Scene3D.Material.AlphaMode
+    let alpha_cutoff:float
+    let double_sided:bool
+    let unlit:bool
+    let casts_shadows:bool
+    let shadow_distance:float
+    let shadow_cascades:int
+
+    init(
+        alpha:GFX.Scene3D.Material.AlphaMode =
+            GFX.Scene3D.Material.AlphaMode.opaque,
+        alpha_cutoff:float = 0.5,
+        double_sided:bool = false,
+        unlit:bool = false,
+        casts_shadows:bool = true,
+        shadow_distance:float = 0.0,
+        shadow_cascades:int = 4
+    ) {
+        self.alpha = alpha
+        self.alpha_cutoff = alpha_cutoff
+        self.double_sided = double_sided
+        self.unlit = unlit
+        self.casts_shadows = casts_shadows
+        self.shadow_distance = shadow_distance
+        self.shadow_cascades = shadow_cascades
+    }
+}
+
+package struct Draw {
+    let cache:int
+    let model:Math.Mat4
+    let instance_cache:int
+    let instance_identity:int
+    let instance_revision:int
+    let instance_parent:Math.Mat4
+    let material:Material
+    let settings:DrawSettings
+    let distance:float
+    let textures:GFX.Scene3D.Material.MaterialTextures
+    let position:Math.Vec3
+}
+
+package class SpatialChunk {
+    var x:int
+    var z:int
+    var models:Math.Mat4[]
+    var uploaded_models:Math.Mat4[]
+    var instances:GPU.Buffer? = null
+    var upload:GPU.TransferBuffer? = null
+    var capacity:int
+    var center:Math.Vec3
+    var radius:float
+    var pending_upload:bool
+
+    init(x:int, z:int) {
+        self.x = x
+        self.z = z
+        self.models = []
+        self.uploaded_models = []
+        self.capacity = 0
+        self.center = Math.Vec3()
+        self.radius = 0.0
+        self.pending_upload = false
+    }
+
+    func reset(x:int, z:int) {
+        self.x = x
+        self.z = z
+        self.models.clear()
+        self.pending_upload = false
+    }
+
+    func needs_upload() bool {
+        return models_need_upload(self.models, self.uploaded_models)
+    }
+
+    func remember_upload() {
+        self.uploaded_models.clear()
+        for model in self.models { self.uploaded_models.append(model) }
+    }
+
+    func rebuild_bounds(local_radius:float) {
+        let bounds = model_bounds(self.models, local_radius)
+        self.center = bounds.center
+        self.radius = bounds.radius
+    }
+}
+
+package class Batch {
+    var cache:int
+    var settings:DrawSettings
+    var draw_index:int
+    var models:Math.Mat4[]
+    var uploaded_models:Math.Mat4[]
+    var instances:GPU.Buffer? = null
+    var upload:GPU.TransferBuffer? = null
+    var capacity:int
+    var center:Math.Vec3
+    var radius:float
+    var pending_upload:bool
+    var models_changed:bool
+    var chunks:SpatialChunk[]
+    var active_chunks:int
+    var chunk_local_radius:float
+    var source_identity:int
+    var source_revision:int
+    var source_parent:Math.Mat4
+
+    init(draw:@Draw, draw_index:int) {
+        self.cache = draw.cache
+        self.settings = draw.settings
+        self.draw_index = draw_index
+        self.models = []
+        self.uploaded_models = []
+        self.capacity = 0
+        self.center = Math.Vec3()
+        self.radius = 0.0
+        self.pending_upload = false
+        self.models_changed = true
+        self.chunks = []
+        self.active_chunks = 0
+        self.chunk_local_radius = -1.0
+        self.source_identity = draw.instance_identity
+        self.source_revision = draw.instance_revision
+        self.source_parent = draw.instance_parent
+    }
+
+    func reset(draw:@Draw, draw_index:int) {
+        let reuses_explicit_instances = draw.instance_revision > 0 &&
+            self.source_revision > 0 &&
+            self.source_identity == draw.instance_identity &&
+            self.cache == draw.cache &&
+            self.source_revision == draw.instance_revision &&
+            same_matrix(self.source_parent, draw.instance_parent)
+        self.cache = draw.cache
+        self.settings = draw.settings
+        self.draw_index = draw_index
+        if !reuses_explicit_instances { self.models.clear() }
+        self.pending_upload = false
+        self.models_changed = draw.instance_revision > 0 &&
+            !reuses_explicit_instances
+        self.source_identity = draw.instance_identity
+        self.source_revision = draw.instance_revision
+        self.source_parent = draw.instance_parent
+    }
+
+    func accepts(source:@Draw, draw:@Draw) bool {
+        return source.instance_revision == 0 && draw.instance_revision == 0 &&
+            self.settings.alpha != GFX.Scene3D.Material.AlphaMode.blend &&
+            self.cache == draw.cache &&
+            self.settings.alpha == draw.settings.alpha &&
+            self.settings.alpha_cutoff == draw.settings.alpha_cutoff &&
+            self.settings.double_sided == draw.settings.double_sided &&
+            self.settings.unlit == draw.settings.unlit &&
+            self.settings.casts_shadows == draw.settings.casts_shadows &&
+            self.settings.shadow_distance == draw.settings.shadow_distance &&
+            self.settings.shadow_cascades == draw.settings.shadow_cascades &&
+            same_material(source.material, draw.material) &&
+            same_textures(source.textures, draw.textures)
+    }
+
+    func needs_upload() bool {
+        return models_need_upload(self.models, self.uploaded_models)
+    }
+
+    func remember_upload() {
+        if self.source_revision > 0 {
+            self.uploaded_models.clear()
+            return
+        }
+        self.uploaded_models.clear()
+        for model in self.models { self.uploaded_models.append(model) }
+    }
+
+    func rebuild_bounds(local_radius:float) {
+        let bounds = model_bounds(self.models, local_radius)
+        self.center = bounds.center
+        self.radius = bounds.radius
+    }
+
+    func rebuild_chunks(local_radius:float) {
+        self.chunk_local_radius = local_radius
+        self.active_chunks = 0
+        for model in self.models {
+            let position = model_position(model)
+            let x = Math.floor(position.x / 16.0) as int
+            let z = Math.floor(position.z / 16.0) as int
+            let index = self.find_or_start_chunk(x, z)
+            var chunk = self.chunks[index]
+            chunk.models.append(model)
+        }
+        var index = 0
+        while index < self.active_chunks {
+            var chunk = self.chunks[index]
+            chunk.rebuild_bounds(local_radius)
+            index++
+        }
+    }
+
+    private func find_or_start_chunk(x:int, z:int) int {
+        var index = 0
+        while index < self.active_chunks {
+            var chunk = self.chunks[index]
+            if chunk.x == x && chunk.z == z { return index }
+            index++
+        }
+        index = self.active_chunks
+        if index < self.chunks.count() {
+            var chunk = self.chunks[index]
+            chunk.reset(x, z)
+        } else {
+            self.chunks.append(SpatialChunk(x, z))
+        }
+        self.active_chunks++
+        return index
+    }
+}
+
+struct ModelBounds {
+    let center:Math.Vec3
+    let radius:float
+}
+
+func models_need_upload(models:@Math.Mat4[], uploaded:@Math.Mat4[]) bool {
+    if models.count() != uploaded.count() { return true }
+    var index = 0
+    while index < models.count() {
+        if !same_matrix(models[index], uploaded[index]) { return true }
+        index++
+    }
+    return false
+}
+
+func model_bounds(models:@Math.Mat4[], local_radius:float) ModelBounds {
+    if models.count() == 0 {
+        return ModelBounds(center:Math.Vec3(), radius:0.0)
+    }
+    let first = model_position(models[0])
+    let first_radius = model_radius(models[0], local_radius)
+    var minimum = first.subtract(Math.Vec3(first_radius))
+    var maximum = first.add(Math.Vec3(first_radius))
+    for model in models {
+        let position = model_position(model)
+        let radius = model_radius(model, local_radius)
+        minimum.x = Math.min(minimum.x, position.x - radius)
+        minimum.y = Math.min(minimum.y, position.y - radius)
+        minimum.z = Math.min(minimum.z, position.z - radius)
+        maximum.x = Math.max(maximum.x, position.x + radius)
+        maximum.y = Math.max(maximum.y, position.y + radius)
+        maximum.z = Math.max(maximum.z, position.z + radius)
+    }
+    let center = minimum.add(maximum).multiply(0.5)
+    var radius = 0.0
+    for model in models {
+        radius = Math.max(
+            radius,
+            model_position(model).subtract(center).length() +
+                model_radius(model, local_radius)
+        )
+    }
+    return ModelBounds(center:center, radius:radius)
+}
+
+func same_matrix(left:Math.Mat4, right:Math.Mat4) bool {
+    return left.x.x == right.x.x && left.x.y == right.x.y &&
+        left.x.z == right.x.z && left.x.w == right.x.w &&
+        left.y.x == right.y.x && left.y.y == right.y.y &&
+        left.y.z == right.y.z && left.y.w == right.y.w &&
+        left.z.x == right.z.x && left.z.y == right.z.y &&
+        left.z.z == right.z.z && left.z.w == right.z.w &&
+        left.w.x == right.w.x && left.w.y == right.w.y &&
+        left.w.z == right.w.z && left.w.w == right.w.w
+}
+
+func model_position(model:Math.Mat4) Math.Vec3 {
+    return model.w.xyz()
+}
+
+func model_radius(model:Math.Mat4, local_radius:float) float {
+    return local_radius * Math.max(
+        Math.max(model.x.xyz().length(), model.y.xyz().length()),
+        model.z.xyz().length()
+    )
+}
+
+func same_material(left:Material, right:Material) bool {
+    return left.albedo == right.albedo &&
+        left.metallic == right.metallic &&
+        left.roughness == right.roughness &&
+        left.occlusion == right.occlusion &&
+        left.emission == right.emission &&
+        left.emission_intensity == right.emission_intensity
+}
+
+func same_textures(
+    left:GFX.Scene3D.Material.MaterialTextures,
+    right:GFX.Scene3D.Material.MaterialTextures
+) bool {
+    return left.normal_scale == right.normal_scale &&
+        same_texture(left.albedo, right.albedo) &&
+        same_texture(left.normal, right.normal) &&
+        same_texture(left.metallic_roughness, right.metallic_roughness) &&
+        same_texture(left.occlusion, right.occlusion) &&
+        same_texture(left.emission, right.emission)
+}
+
+func same_texture(
+    left:GFX.Scene3D.Material.MaterialTexture?,
+    right:GFX.Scene3D.Material.MaterialTexture?
+) bool {
+    if let left_value = left {
+        if let right_value = right {
+            return left_value.image.index() == right_value.image.index() &&
+                left_value.image.generation() == right_value.image.generation() &&
+                left_value.offset.x == right_value.offset.x &&
+                left_value.offset.y == right_value.offset.y &&
+                left_value.scale.x == right_value.scale.x &&
+                left_value.scale.y == right_value.scale.y &&
+                left_value.rotation == right_value.rotation
+        }
+        return false
+    }
+    return right == null
+}

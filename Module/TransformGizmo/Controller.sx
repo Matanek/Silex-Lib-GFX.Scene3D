@@ -1,0 +1,28 @@
+public enum Mode {
+    translate
+    rotate
+    scale
+}
+
+public enum Space {
+    world_space
+    local_space
+}
+
+public class Controller {
+    private var current_mode:Mode
+    private var current_space:Space
+
+    init(
+        mode:Mode = Mode.translate,
+        space:Space = Space.world_space
+    ) {
+        self.current_mode = mode
+        self.current_space = space
+    }
+
+    func mode() Mode { return self.current_mode }
+    func space() Space { return self.current_space }
+    func set_mode(mode:Mode) { self.current_mode = mode }
+    func set_space(space:Space) { self.current_space = space }
+}

@@ -1,0 +1,385 @@
+use GFX.Color
+use GFX.ECS
+use GFX.Scene3D.CubeProjectorLight
+use GFX.Scene3D.CubeProjectorLightGizmo
+use GFX.Scene3D.PointLight
+use GFX.Scene3D.PointLightGizmo
+use GFX.Scene3D.SpotProjectorLight
+use GFX.Scene3D.SpotProjectorLightGizmo
+use GFX.Scene3D.SunLight
+use GFX.Scene3D.SunLightGizmo
+use GFX.Scene3D.Transform
+use GFX.Scene3D.TubeProjectorLight
+use GFX.Scene3D.TubeProjectorLightGizmo
+use STD.Math
+
+struct Vertex {
+    let position:Math.Vec3
+    let color:Color
+}
+
+struct Basis {
+    let forward:Math.Vec3
+    let right:Math.Vec3
+    let up:Math.Vec3
+}
+
+class Frame {
+    private var vertices:Vertex[]
+
+    init() { self.vertices = [] }
+    func all() @Vertex[..] { return @self.vertices[0:self.vertices.count()] }
+    func count() int { return self.vertices.count() }
+
+    func rebuild(world:@ECS.World) {
+        self.vertices.clear()
+        for entity in world.entities() {
+            if world.has<SunLight>(entity) && world.has<SunLightGizmo>(entity) {
+                let light = world.get<SunLight>(entity)
+                let gizmo = world.get<SunLightGizmo>(entity)
+                if light.enabled && gizmo.visible {
+                    let direction = direction_or(light.direction, Math.Vec3.down())
+                    var origin = direction.negated().multiply(gizmo.ray_length * 0.5)
+                        .add(Math.Vec3.up().multiply(1.6))
+                    if world.has<Transform>(entity) {
+                        origin = world.get<Transform>(entity).position
+                    }
+                    self.add_circle(origin, direction, gizmo.radius, gizmo.color)
+                    self.add_line(
+                        origin,
+                        origin.add(direction.multiply(gizmo.ray_length)),
+                        gizmo.color
+                    )
+                }
+            }
+            if world.has<Transform>(entity) {
+                let transform = world.get<Transform>(entity)
+                self.collect_point(world, entity, transform)
+                self.collect_spot(world, entity, transform)
+                self.collect_cube(world, entity, transform)
+                self.collect_tube(world, entity, transform)
+            }
+        }
+    }
+
+    private func collect_point(world:@ECS.World, entity:ECS.Entity, transform:@Transform) {
+        if world.has<PointLight>(entity) && world.has<PointLightGizmo>(entity) {
+            let light = world.get<PointLight>(entity)
+            let gizmo = world.get<PointLightGizmo>(entity)
+            if light.enabled && gizmo.visible {
+                let radius = Math.max(gizmo.radius, 0.001)
+                self.add_cross(transform.position, radius, gizmo.color)
+                if gizmo.show_radius {
+                    self.add_sphere(
+                        transform.position,
+                        Math.max(light.radius, 0.001),
+                        gizmo.color
+                    )
+                }
+                if gizmo.show_falloff {
+                    let falloff = Math.max(light.radius, 0.001) *
+                        (1.0 + Math.max(light.falloff, 0.0))
+                    self.add_sphere(
+                        transform.position,
+                        falloff,
+                        falloff_color(gizmo.color, light.softness)
+                    )
+                }
+            }
+        }
+    }
+
+    private func collect_spot(world:@ECS.World, entity:ECS.Entity, transform:@Transform) {
+        if world.has<SpotProjectorLight>(entity) &&
+            world.has<SpotProjectorLightGizmo>(entity)
+        {
+            let light = world.get<SpotProjectorLight>(entity)
+            let gizmo = world.get<SpotProjectorLightGizmo>(entity)
+            if light.enabled && gizmo.visible {
+                let direction = direction_or(light.direction, Math.Vec3.down())
+                let reach = Math.max(light.reach, 0.001)
+                self.add_cone(
+                    transform.position,
+                    direction,
+                    reach,
+                    light.angle,
+                    gizmo.color,
+                    true
+                )
+                if gizmo.show_falloff {
+                    self.add_cone_falloff(
+                        transform.position,
+                        direction,
+                        reach,
+                        reach * Math.max(light.falloff, 0.0),
+                        light.angle,
+                        falloff_color(gizmo.color, 0.0)
+                    )
+                }
+            }
+        }
+    }
+
+    private func collect_cube(world:@ECS.World, entity:ECS.Entity, transform:@Transform) {
+        if world.has<CubeProjectorLight>(entity) &&
+            world.has<CubeProjectorLightGizmo>(entity)
+        {
+            let light = world.get<CubeProjectorLight>(entity)
+            let gizmo = world.get<CubeProjectorLightGizmo>(entity)
+            if light.enabled && gizmo.visible {
+                let basis = make_basis(direction_or(light.direction, Math.Vec3.down()))
+                self.add_source(transform.position, basis, gizmo.color)
+                self.add_box(transform.position, basis, light.size, gizmo.color)
+                if gizmo.show_falloff {
+                    self.add_box(
+                        transform.position.add(basis.forward.multiply(light.size.z)),
+                        basis,
+                        Math.Vec3(
+                            light.size.x,
+                            light.size.y,
+                            light.size.z * Math.max(light.falloff, 0.0)
+                        ),
+                        falloff_color(gizmo.color, 0.0)
+                    )
+                }
+            }
+        }
+    }
+
+    private func collect_tube(world:@ECS.World, entity:ECS.Entity, transform:@Transform) {
+        if world.has<TubeProjectorLight>(entity) &&
+            world.has<TubeProjectorLightGizmo>(entity)
+        {
+            let light = world.get<TubeProjectorLight>(entity)
+            let gizmo = world.get<TubeProjectorLightGizmo>(entity)
+            if light.enabled && gizmo.visible {
+                let basis = make_basis(direction_or(light.direction, Math.Vec3.down()))
+                self.add_source(transform.position, basis, gizmo.color)
+                self.add_tube(
+                    transform.position,
+                    basis,
+                    light.length,
+                    light.radius,
+                    gizmo.color
+                )
+                if gizmo.show_falloff {
+                    self.add_tube(
+                        transform.position.add(basis.forward.multiply(light.length)),
+                        basis,
+                        light.length * Math.max(light.falloff, 0.0),
+                        light.radius,
+                        falloff_color(gizmo.color, 0.0)
+                    )
+                }
+            }
+        }
+    }
+
+    private func add_line(start:Math.Vec3, end:Math.Vec3, color:Color) {
+        self.vertices.append(Vertex(position:start, color:color))
+        self.vertices.append(Vertex(position:end, color:color))
+    }
+
+    private func add_cross(position:Math.Vec3, radius:float, color:Color) {
+        self.add_line(
+            position.subtract(Math.Vec3.right().multiply(radius)),
+            position.add(Math.Vec3.right().multiply(radius)),
+            color
+        )
+        self.add_line(
+            position.subtract(Math.Vec3.up().multiply(radius)),
+            position.add(Math.Vec3.up().multiply(radius)),
+            color
+        )
+        self.add_line(
+            position.subtract(Math.Vec3.back().multiply(radius)),
+            position.add(Math.Vec3.back().multiply(radius)),
+            color
+        )
+    }
+
+    private func add_source(position:Math.Vec3, basis:Basis, color:Color) {
+        self.add_cross(position, 0.18, color)
+        let end = position.add(basis.forward.multiply(0.55))
+        self.add_line(position, end, color)
+        self.add_line(
+            end,
+            end.subtract(basis.forward.multiply(0.16))
+                .add(basis.right.multiply(0.16)),
+            color
+        )
+        self.add_line(
+            end,
+            end.subtract(basis.forward.multiply(0.16))
+                .subtract(basis.right.multiply(0.16)),
+            color
+        )
+    }
+
+    private func add_sphere(center:Math.Vec3, radius:float, color:Color) {
+        self.add_circle(center, Math.Vec3.up(), radius, color)
+        self.add_circle(center, Math.Vec3.right(), radius, color)
+        self.add_circle(center, Math.Vec3.back(), radius, color)
+    }
+
+    private func add_circle(
+        center:Math.Vec3,
+        normal:Math.Vec3,
+        radius:float,
+        color:Color
+    ) {
+        if radius > 0.0 {
+            let basis = make_basis(normal)
+            var index = 0
+            while index < 24 {
+                let first = Math.two_pi() * index as float / 24.0
+                let second = Math.two_pi() * (index + 1) as float / 24.0
+                self.add_line(
+                    center.add(basis.right.multiply(Math.cos(first) * radius))
+                        .add(basis.up.multiply(Math.sin(first) * radius)),
+                    center.add(basis.right.multiply(Math.cos(second) * radius))
+                        .add(basis.up.multiply(Math.sin(second) * radius)),
+                    color
+                )
+                index++
+            }
+        }
+    }
+
+    private func add_cone(
+        position:Math.Vec3,
+        direction:Math.Vec3,
+        length:float,
+        angle:float,
+        color:Color,
+        rays:bool
+    ) {
+        if length > 0.0 {
+            let basis = make_basis(direction)
+            let center = position.add(basis.forward.multiply(length))
+            let radius = Math.tan(Math.max(angle, 0.0)) * length
+            self.add_circle(center, basis.forward, radius, color)
+            if rays {
+                var index = 0
+                while index < 8 {
+                    let theta = Math.two_pi() * index as float / 8.0
+                    let edge = center
+                        .add(basis.right.multiply(Math.cos(theta) * radius))
+                        .add(basis.up.multiply(Math.sin(theta) * radius))
+                    self.add_line(position, edge, color)
+                    index++
+                }
+            }
+        }
+    }
+
+    private func add_cone_falloff(
+        position:Math.Vec3,
+        direction:Math.Vec3,
+        reach:float,
+        falloff:float,
+        angle:float,
+        color:Color
+    ) {
+        if falloff > 0.0 {
+            let basis = make_basis(direction)
+            let tangent = Math.tan(Math.max(angle, 0.0))
+            let inner_center = position.add(basis.forward.multiply(reach))
+            let outer_reach = reach + falloff
+            let outer_center = position.add(basis.forward.multiply(outer_reach))
+            let inner_radius = tangent * reach
+            let outer_radius = tangent * outer_reach
+            // As with box and tube projectors, the falloff owns the shared
+            // boundary so the blue volume visibly continues the yellow one.
+            self.add_circle(inner_center, basis.forward, inner_radius, color)
+            self.add_circle(outer_center, basis.forward, outer_radius, color)
+            var index = 0
+            while index < 8 {
+                let theta = Math.two_pi() * index as float / 8.0
+                let radial = basis.right.multiply(Math.cos(theta))
+                    .add(basis.up.multiply(Math.sin(theta)))
+                self.add_line(
+                    inner_center.add(radial.multiply(inner_radius)),
+                    outer_center.add(radial.multiply(outer_radius)),
+                    color
+                )
+                index++
+            }
+        }
+    }
+
+    private func add_box(position:Math.Vec3, basis:Basis, size:Math.Vec3, color:Color) {
+        let right = basis.right.multiply(Math.max(size.x, 0.001) * 0.5)
+        let up = basis.up.multiply(Math.max(size.y, 0.001) * 0.5)
+        let end = position.add(basis.forward.multiply(Math.max(size.z, 0.001)))
+        let start_corners:Math.Vec3[] = [
+            position.subtract(right).subtract(up),
+            position.add(right).subtract(up),
+            position.add(right).add(up),
+            position.subtract(right).add(up)
+        ]
+        let end_corners:Math.Vec3[] = [
+            end.subtract(right).subtract(up),
+            end.add(right).subtract(up),
+            end.add(right).add(up),
+            end.subtract(right).add(up)
+        ]
+        var index = 0
+        while index < 4 {
+            let next = (index + 1) % 4
+            self.add_line(start_corners[index], start_corners[next], color)
+            self.add_line(end_corners[index], end_corners[next], color)
+            self.add_line(start_corners[index], end_corners[index], color)
+            index++
+        }
+    }
+
+    private func add_tube(
+        position:Math.Vec3,
+        basis:Basis,
+        length:float,
+        radius:float,
+        color:Color
+    ) {
+        if length > 0.0 {
+            let end = position.add(basis.forward.multiply(length))
+            self.add_circle(position, basis.forward, radius, color)
+            self.add_circle(end, basis.forward, radius, color)
+            var index = 0
+            while index < 8 {
+                let theta = Math.two_pi() * index as float / 8.0
+                let offset = basis.right.multiply(Math.cos(theta) * radius)
+                    .add(basis.up.multiply(Math.sin(theta) * radius))
+                self.add_line(position.add(offset), end.add(offset), color)
+                index++
+            }
+        }
+    }
+}
+
+func direction_or(value:Math.Vec3, fallback:Math.Vec3) Math.Vec3 {
+    let direction = value.normalized()
+    if direction.length_squared() <= 0.000001 { return fallback }
+    return direction
+}
+
+func make_basis(forward:Math.Vec3) Basis {
+    let direction = direction_or(forward, Math.Vec3.front())
+    var reference = Math.Vec3.up()
+    if Math.abs(direction.dot(reference)) > 0.95 { reference = Math.Vec3.back() }
+    let right = reference.cross(direction).normalized()
+    return Basis(
+        forward:direction,
+        right:right,
+        up:direction.cross(right)
+    )
+}
+
+func falloff_color(color:Color, softness:float) Color {
+    return Color(
+        r:0.22,
+        g:0.58,
+        b:1.0,
+        a:color.a * 0.35 * (1.0 - Math.clamp(softness, 0.0, 1.0))
+    )
+}

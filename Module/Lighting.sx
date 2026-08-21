@@ -1,0 +1,311 @@
+use GFX.Color
+use GFX.ECS
+use GFX.Scene3D.AmbientLight
+use GFX.Scene3D.CubeProjectorLight
+use GFX.Scene3D.PointLight
+use GFX.Scene3D.Shadow
+use GFX.Scene3D.SpotProjectorLight
+use GFX.Scene3D.SunLight
+use GFX.Scene3D.Transform
+use GFX.Scene3D.TubeProjectorLight
+use STD.Math
+
+enum Kind:int {
+    sun = 0
+    point = 1
+    spot_projector = 2
+    cube_projector = 4
+    tube_projector = 5
+}
+
+struct Light {
+    let kind:Kind
+    let direction:Math.Vec3
+    let position:Math.Vec3
+    let color:Color
+    let intensity:float
+    let reach:float
+    let angle:float
+    let projection_angle:float
+    let projection_size:Math.Vec3
+    let projection_radius:float
+    let influence_softness:float
+    let falloff:float
+    let shadow_caster_distance:float
+    let shadow_center:Math.Vec3
+    let shadow_size:Math.Vec2
+    let shadow_depth:float
+    let shadow_distance:float
+    let shadow_cascade_distances:Math.Vec4
+    let shadow_follows_camera:bool
+    let shadow:Shadow
+}
+
+class Frame {
+    private var current_ambient:Color
+    private var lights:Light[]
+    private var shadow_count:int
+    private var found_light_component:bool
+
+    init() {
+        self.current_ambient = Color(r:1.0, g:1.0, b:1.0, a:0.07)
+        self.lights = []
+        self.shadow_count = 0
+        self.found_light_component = false
+    }
+
+    func all() @Light[..] { return @self.lights[0:self.lights.count()] }
+    func count() int { return self.lights.count() }
+    func shadowed_count() int { return self.shadow_count }
+    func ambient() Color { return self.current_ambient }
+
+    func rebuild(world:@ECS.World) {
+        self.current_ambient = Color(r:1.0, g:1.0, b:1.0, a:0.07)
+        self.lights.clear()
+        self.shadow_count = 0
+        self.found_light_component = false
+        var ambient_selected = false
+        for entity in world.entities() {
+            if world.has<AmbientLight>(entity) {
+                let ambient = world.get<AmbientLight>(entity)
+                if !ambient_selected {
+                    ambient_selected = true
+                    if ambient.enabled && ambient.intensity > 0.0 {
+                        self.current_ambient = Color(
+                            r:ambient.color.r,
+                            g:ambient.color.g,
+                            b:ambient.color.b,
+                            a:ambient.intensity
+                        )
+                    } else {
+                        self.current_ambient = Color.transparent()
+                    }
+                }
+            }
+            if world.has<SunLight>(entity) {
+                self.found_light_component = true
+                self.collect_sun(world.get<SunLight>(entity))
+            }
+            if world.has<Transform>(entity) {
+                let transform = world.get<Transform>(entity)
+                if world.has<PointLight>(entity) {
+                    self.found_light_component = true
+                    self.collect_point(transform, world.get<PointLight>(entity))
+                }
+                if world.has<SpotProjectorLight>(entity) {
+                    self.found_light_component = true
+                    self.collect_spot(transform, world.get<SpotProjectorLight>(entity))
+                }
+                if world.has<CubeProjectorLight>(entity) {
+                    self.found_light_component = true
+                    self.collect_cube(transform, world.get<CubeProjectorLight>(entity))
+                }
+                if world.has<TubeProjectorLight>(entity) {
+                    self.found_light_component = true
+                    self.collect_tube(transform, world.get<TubeProjectorLight>(entity))
+                }
+            }
+        }
+        if self.lights.count() == 0 && !self.found_light_component {
+            self.append(Light(
+                kind:Kind.sun,
+                direction:Math.Vec3(-0.45, -0.9, -0.35).normalized(),
+                position:Math.Vec3(),
+                color:Color.white(),
+                intensity:1.0,
+                reach:1.0,
+                angle:Math.radians(18.0),
+                projection_angle:Math.radians(28.0),
+                projection_size:Math.Vec3(2.0, 2.0, 4.0),
+                projection_radius:1.0,
+                influence_softness:0.25,
+                falloff:1.0,
+                shadow_caster_distance:0.0,
+                shadow_center:Math.Vec3(0.0, 0.8, 0.0),
+                shadow_size:Math.Vec2(8.0),
+                shadow_depth:12.0,
+                shadow_distance:0.0,
+                shadow_cascade_distances:Math.Vec4(),
+                shadow_follows_camera:true,
+                shadow:Shadow(enabled:false)
+            ))
+        }
+    }
+
+    private func append(light:Light) {
+        if self.lights.count() < 16 {
+            self.lights.append(light)
+            if light.shadow.enabled { self.shadow_count++ }
+        }
+    }
+
+    private func collect_sun(light:@SunLight) {
+        let direction = safe_direction(light.direction)
+        if light.enabled && light.intensity > 0.0 && direction.length_squared() > 0.0 {
+            self.append(Light(
+                kind:Kind.sun,
+                direction:direction,
+                position:Math.Vec3(),
+                color:light.color,
+                intensity:light.intensity,
+                reach:1.0,
+                angle:Math.radians(18.0),
+                projection_angle:Math.radians(28.0),
+                projection_size:Math.Vec3(2.0, 2.0, 4.0),
+                projection_radius:1.0,
+                influence_softness:0.25,
+                falloff:1.0,
+                shadow_caster_distance:0.0,
+                shadow_center:light.shadow_center,
+                shadow_size:Math.Vec2(
+                    Math.max(light.shadow_size.x, 0.001),
+                    Math.max(light.shadow_size.y, 0.001)
+                ),
+                shadow_depth:Math.max(light.shadow_depth, 0.002),
+                shadow_distance:Math.max(light.shadow_distance, 0.0),
+                shadow_cascade_distances:light.shadow_cascade_distances,
+                shadow_follows_camera:light.shadow_follows_camera,
+                shadow:sanitized_shadow(light.shadow)
+            ))
+        }
+    }
+
+    private func collect_point(transform:@Transform, light:@PointLight) {
+        if light.enabled && light.intensity > 0.0 {
+            let radius = Math.max(light.radius, 0.001)
+            let falloff = radius * Math.max(light.falloff, 0.0)
+            self.append(Light(
+                kind:Kind.point,
+                direction:Math.Vec3.down(),
+                position:transform.position,
+                color:light.color,
+                intensity:light.intensity,
+                reach:radius + falloff,
+                angle:Math.radians(18.0),
+                projection_angle:Math.radians(28.0),
+                projection_size:Math.Vec3(2.0, 2.0, 4.0),
+                projection_radius:radius,
+                influence_softness:Math.max(light.softness, 0.0),
+                falloff:falloff,
+                shadow_caster_distance:0.0,
+                shadow_center:Math.Vec3(0.0, 0.8, 0.0),
+                shadow_size:Math.Vec2(8.0),
+                shadow_depth:12.0,
+                shadow_distance:0.0,
+                shadow_cascade_distances:Math.Vec4(),
+                shadow_follows_camera:false,
+                shadow:sanitized_shadow(light.shadow)
+            ))
+        }
+    }
+
+    private func collect_spot(transform:@Transform, light:@SpotProjectorLight) {
+        let direction = safe_direction(light.direction)
+        if light.enabled && light.intensity > 0.0 && direction.length_squared() > 0.0 {
+            let reach = Math.max(light.reach, 0.001)
+            let falloff = reach * Math.max(light.falloff, 0.0)
+            self.append(Light(
+                kind:Kind.spot_projector,
+                direction:direction,
+                position:transform.position,
+                color:light.color,
+                intensity:light.intensity,
+                reach:reach + falloff,
+                angle:Math.max(light.angle, 0.0),
+                projection_angle:Math.max(light.angle, 0.0) + Math.max(light.softness, 0.0),
+                projection_size:Math.Vec3(2.0, 2.0, 4.0),
+                projection_radius:1.0,
+                influence_softness:0.25,
+                falloff:falloff,
+                shadow_caster_distance:0.0,
+                shadow_center:Math.Vec3(0.0, 0.8, 0.0),
+                shadow_size:Math.Vec2(8.0),
+                shadow_depth:12.0,
+                shadow_distance:0.0,
+                shadow_cascade_distances:Math.Vec4(),
+                shadow_follows_camera:false,
+                shadow:sanitized_shadow(light.shadow)
+            ))
+        }
+    }
+
+    private func collect_cube(transform:@Transform, light:@CubeProjectorLight) {
+        let direction = safe_direction(light.direction)
+        if light.enabled && light.intensity > 0.0 && direction.length_squared() > 0.0 {
+            let size = Math.Vec3(
+                Math.max(light.size.x, 0.001),
+                Math.max(light.size.y, 0.001),
+                Math.max(light.size.z, 0.001)
+            )
+            let falloff = size.z * Math.max(light.falloff, 0.0)
+            self.append(Light(
+                kind:Kind.cube_projector,
+                direction:direction,
+                position:transform.position,
+                color:light.color,
+                intensity:light.intensity,
+                reach:size.z + falloff,
+                angle:Math.radians(18.0),
+                projection_angle:Math.radians(28.0),
+                projection_size:size,
+                projection_radius:Math.max(size.x, size.y) * 0.5,
+                influence_softness:Math.max(light.softness, 0.0),
+                falloff:falloff,
+                shadow_caster_distance:Math.max(light.shadow_caster_distance, 0.0),
+                shadow_center:Math.Vec3(0.0, 0.8, 0.0),
+                shadow_size:Math.Vec2(size.x, size.y),
+                shadow_depth:size.z,
+                shadow_distance:0.0,
+                shadow_cascade_distances:Math.Vec4(),
+                shadow_follows_camera:false,
+                shadow:sanitized_shadow(light.shadow)
+            ))
+        }
+    }
+
+    private func collect_tube(transform:@Transform, light:@TubeProjectorLight) {
+        let direction = safe_direction(light.direction)
+        if light.enabled && light.intensity > 0.0 && direction.length_squared() > 0.0 {
+            let length = Math.max(light.length, 0.001)
+            let radius = Math.max(light.radius, 0.001)
+            let falloff = length * Math.max(light.falloff, 0.0)
+            self.append(Light(
+                kind:Kind.tube_projector,
+                direction:direction,
+                position:transform.position,
+                color:light.color,
+                intensity:light.intensity,
+                reach:length + falloff,
+                angle:Math.radians(18.0),
+                projection_angle:Math.radians(28.0),
+                projection_size:Math.Vec3(radius * 2.0, radius * 2.0, length),
+                projection_radius:radius,
+                influence_softness:Math.max(light.softness, 0.0),
+                falloff:falloff,
+                shadow_caster_distance:Math.max(light.shadow_caster_distance, 0.0),
+                shadow_center:Math.Vec3(0.0, 0.8, 0.0),
+                shadow_size:Math.Vec2(radius * 2.0),
+                shadow_depth:length,
+                shadow_distance:0.0,
+                shadow_cascade_distances:Math.Vec4(),
+                shadow_follows_camera:false,
+                shadow:sanitized_shadow(light.shadow)
+            ))
+        }
+    }
+}
+
+func safe_direction(value:Math.Vec3) Math.Vec3 {
+    let direction = value.normalized()
+    if direction.length_squared() <= 0.000001 { return Math.Vec3() }
+    return direction
+}
+
+func sanitized_shadow(value:Shadow) Shadow {
+    var shadow = value
+    shadow.near_plane = Math.max(shadow.near_plane, 0.001)
+    shadow.bias = Math.max(shadow.bias, 0.0)
+    shadow.normal_offset = Math.max(shadow.normal_offset, 0.0)
+    shadow.softness = Math.max(shadow.softness, 0.0)
+    return shadow
+}

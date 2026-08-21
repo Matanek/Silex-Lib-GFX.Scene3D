@@ -1,0 +1,59 @@
+use GFX.Assets.Image
+use GFX.Assets.Model
+use GFX.Assets.GLTF
+use GFX.ECS
+use GFX.Scene3D
+use STD.Math
+
+test "instantiate imported model geometry and PBR materials into Scene3D" {
+    let model = GLTF.decode(
+        embed_bytes("../Assets/Models/Grass.glb"),
+        GLTF.Format.glb
+    )
+    var world = ECS.World()
+    var meshes = Scene3D.Meshes()
+    var images = Image.Store()
+    let instance = Scene3D.instantiate(model, world, meshes, images)
+
+    assert(instance.entities.count() > 0)
+    assert(world.has<Scene3D.Transform>(instance.entities[0]))
+    assert(world.has<Scene3D.Mesh>(instance.entities[0]))
+    assert(world.has<Scene3D.Material>(instance.entities[0]))
+    var textured = 0
+    for entity in instance.entities {
+        if world.has<Scene3D.MaterialSettings>(entity) {
+            let settings = world.get<Scene3D.MaterialSettings>(entity)
+            if settings.textures.albedo != null || settings.textures.normal != null ||
+                settings.textures.metallic_roughness != null ||
+                settings.textures.occlusion != null || settings.textures.emission != null
+            {
+                textured++
+            }
+        }
+    }
+    assert(textured > 0)
+
+    let vertices:Model.Vertex[] = [
+        Model.Vertex(position:Math.Vec3(-0.5, -0.5, 0.0)),
+        Model.Vertex(position:Math.Vec3(0.5, -0.5, 0.0)),
+        Model.Vertex(position:Math.Vec3(0.0, 0.5, 0.0))
+    ]
+    let indices:uint32[] = [0, 1, 2]
+    var transparent_material = Model.Material()
+    transparent_material.alpha_mode = Model.AlphaMode.blend
+    let transparent_model = Model.from_geometry(
+        Model.Geometry(vertices, indices),
+        transparent_material,
+        "Transparent triangle"
+    )
+    let transparent = Scene3D.instantiate(
+        transparent_model,
+        world,
+        meshes,
+        images
+    )
+    assert(
+        world.get<Scene3D.MaterialSettings>(transparent.entities[0]).alpha ==
+        Scene3D.AlphaMode.blend
+    )
+}

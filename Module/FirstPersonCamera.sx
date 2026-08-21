@@ -1,0 +1,20 @@
+use STD.Math
+
+public struct Settings {
+    var position:Math.Vec3
+    var yaw:float = 0.0
+    var pitch:float = 0.0
+    var move_speed:float = 5.0
+    var sprint_multiplier:float = 2.0
+    var look_sensitivity:float = 0.0025
+    var min_pitch:float = -1.5009832
+    var max_pitch:float = 1.5009832
+    var vertical_fov:float = 1.0471976
+    var near_plane:float = 0.05
+    var far_plane:float = 500.0
+    var order:int = 0
+    var active:bool = true
+    var capture_mouse:bool = true
+
+    init() { self.position = Math.Vec3(0.0, 1.7, 5.0) }
+}

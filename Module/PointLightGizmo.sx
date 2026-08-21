@@ -1,0 +1,17 @@
+use GFX.Color
+
+public struct PointLightGizmo {
+    var color:Color
+    var radius:float
+    var show_radius:bool
+    var show_falloff:bool
+    var visible:bool
+
+    init(color:Color = Color.gizmos(), visible:bool = true) {
+        self.color = color
+        self.radius = 0.18
+        self.show_radius = true
+        self.show_falloff = true
+        self.visible = visible
+    }
+}
