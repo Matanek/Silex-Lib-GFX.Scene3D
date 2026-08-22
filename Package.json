@@ -5,9 +5,11 @@
   "dependencies": {
     "GFX": "^0.37.0",
     "GFX.Assets": "^0.1.0",
+    "GFX.Canvas": "^0.1.0",
     "GFX.ECS": "^0.1.0",
     "GFX.GPU": "^0.1.0",
     "GFX.Rendering": "^0.1.0",
+    "GFX.Scene2D": "^0.1.0",
     "STD": "^0.16.0"
   },
   "devDependencies": {

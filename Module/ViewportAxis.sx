@@ -1,0 +1,432 @@
+use GFX.Application
+use GFX.Application.Plugin as PluginProtocol
+use GFX.Application.Schedule
+use GFX.Canvas
+use GFX.Color
+use GFX.ECS
+use GFX.Scene2D
+use GFX.Scene3D.Camera
+use GFX.Scene3D.Plugin as ScenePlugin
+use GFX.Scene3D.Transform as Transform3D
+use GFX.Scene3D.ViewportCamera.View
+use STD.Math
+use STD.Math.Quat
+
+package struct ViewportAxisMarker {
+    let position:Math.Vec2
+    let depth:float
+    let view:View
+    let color:Color
+    let label:str
+    let positive:bool
+}
+
+package class ViewportAxisState {
+    let settings:ViewportAxis.Settings
+    var background:ECS.Entity
+    var displays:ECS.Entity[]
+    var markers:ViewportAxisMarker[]
+    var hovered:int
+    var drawn_hovered:int
+    var orbit_hovered:bool
+    var drawn_orbit_hovered:bool
+    var last_rotation:Math.Quat
+    var has_rotation:bool
+
+    init(settings:ViewportAxis.Settings) {
+        self.settings = settings
+        self.background = ECS.Entity()
+        self.displays = []
+        self.markers = []
+        self.hovered = -1
+        self.drawn_hovered = -2
+        self.orbit_hovered = false
+        self.drawn_orbit_hovered = false
+        self.last_rotation = Math.Quat()
+        self.has_rotation = false
+    }
+
+    func hit_test(mouse:Math.Vec2, viewport:Math.Vec2) int {
+        let origin = Math.Vec2(
+            viewport.x - self.settings.margin.x - self.settings.size,
+            self.settings.margin.y
+        )
+        let local_mouse = mouse.subtract(origin)
+        let radius = marker_radius(self.settings) + self.settings.size * 0.03
+        var index = self.markers.count()
+        while index > 0 {
+            index--
+            if self.markers[index].position.distance(local_mouse) <= radius {
+                return index
+            }
+        }
+        return -1
+    }
+
+    func is_inside_orbit(mouse:Math.Vec2, viewport:Math.Vec2) bool {
+        let origin = Math.Vec2(
+            viewport.x - self.settings.margin.x - self.settings.size,
+            self.settings.margin.y
+        )
+        let center = Math.Vec2(self.settings.size * 0.5)
+        return mouse.subtract(origin).distance(center) <= orbit_radius(self.settings)
+    }
+
+    func selected_view(index:int) View? {
+        if index < 0 || index >= self.markers.count() { return null }
+        return self.markers[index].view
+    }
+
+    func needs_refresh(rotation:Math.Quat) bool {
+        if !self.has_rotation || self.hovered != self.drawn_hovered ||
+            self.orbit_hovered != self.drawn_orbit_hovered
+        {
+            return true
+        }
+        let similarity = Math.abs(self.last_rotation.normalized().dot(rotation.normalized()))
+        return 1.0 - similarity > 0.000001
+    }
+
+    func did_refresh(rotation:Math.Quat) {
+        self.last_rotation = rotation
+        self.has_rotation = true
+        self.drawn_hovered = self.hovered
+        self.drawn_orbit_hovered = self.orbit_hovered
+    }
+}
+
+public struct ViewportAxis:PluginProtocol {
+    struct Settings {
+        var margin:Math.Vec2
+        var size:float
+        var layer:int
+        var background:Color
+        var hover_background:Color
+        var x_color:Color
+        var y_color:Color
+        var z_color:Color
+
+        init() {
+            self.margin = Math.Vec2(20.0)
+            self.size = 68.0
+            self.layer = 100
+            self.background = Color.slate_950().with_alpha(0.20)
+            self.hover_background = Color.slate_500().with_alpha(0.55)
+            self.x_color = Color.red_500()
+            self.y_color = Color.lime_500()
+            self.z_color = Color.blue_500()
+        }
+    }
+
+    private let settings:Settings
+
+    init(settings:ViewportAxis.Settings = ViewportAxis.Settings()) {
+        validate(settings)
+        self.settings = settings
+    }
+
+    func id() str { return "GFX.Scene3D.ViewportAxis" }
+
+    func build(application:&Application) {
+        application.add_plugin(ScenePlugin())
+        application.add_plugin(Scene2D.Plugin())
+        application.add_resource(ViewportAxisState(self.settings))
+        application.add_after_system(Schedule.startup, create_viewport_axis)
+        application.add_system(Schedule.post_update, update_viewport_axis)
+        application.add_system(Schedule.shutdown, stop_viewport_axis)
+    }
+}
+
+func validate(settings:ViewportAxis.Settings) {
+    if settings.margin.x < 0.0 || settings.margin.y < 0.0 {
+        panic("GFX.Scene3D.ViewportAxis margins must not be negative")
+    }
+    if settings.size < 48.0 {
+        panic("GFX.Scene3D.ViewportAxis size must be at least 48 pixels")
+    }
+}
+
+func create_viewport_axis(
+    state:&ViewportAxisState,
+    world:&ECS.World
+) {
+    var rotation = Math.Quat()
+    var visible = false
+    if let selected = active_camera_rotation(world) {
+        rotation = selected
+        visible = true
+    }
+    let pixels = Math.round(state.settings.size) as int
+    state.markers = viewport_axis_markers(state.settings, rotation)
+    state.background = world.spawn(ECS.EntityRecipe()
+        ..with(Scene2D.Transform(position:Math.Vec2(
+            -state.settings.margin.x,
+            state.settings.margin.y
+        )))
+        ..with(Scene2D.Canvas(viewport_axis_background_canvas(state), pixels, pixels)
+            ..anchor = Math.Vec2(1.0, 0.0)
+            ..pivot = Math.Vec2(1.0, 0.0)
+            ..space = Scene2D.CanvasSpace.viewport
+            ..layer = state.settings.layer
+            ..visible = visible
+        )
+    )
+    for marker in state.markers {
+        state.displays.append(world.spawn(ECS.EntityRecipe()
+            ..with(Scene2D.Transform(position:Math.Vec2(
+                -state.settings.margin.x,
+                state.settings.margin.y
+            )))
+            ..with(Scene2D.Canvas(
+                viewport_axis_marker_canvas(state, marker),
+                pixels,
+                pixels
+            )
+                ..anchor = Math.Vec2(1.0, 0.0)
+                ..pivot = Math.Vec2(1.0, 0.0)
+                ..space = Scene2D.CanvasSpace.viewport
+                ..layer = state.settings.layer
+                ..visible = visible
+            )
+        ))
+    }
+    if visible { state.did_refresh(rotation) }
+}
+
+func update_viewport_axis(
+    state:&ViewportAxisState,
+    world:&ECS.World
+) {
+    if !world.is_alive(state.background) { return }
+    if let rotation = active_camera_rotation(world) {
+        if state.needs_refresh(rotation) {
+            state.markers = viewport_axis_markers(state.settings, rotation)
+            var background = viewport_axis_background_canvas(state)
+            world.update<Scene2D.Canvas>(state.background, func(display:&Scene2D.Canvas) {
+                display.replace(background)
+                display.visible = true
+            })
+            var index = 0
+            while index < state.displays.count() && index < state.markers.count() {
+                let entity = state.displays[index]
+                let marker = copy state.markers[index]
+                var drawing = viewport_axis_marker_canvas(state, marker)
+                world.update<Scene2D.Canvas>(entity, func(display:&Scene2D.Canvas) {
+                    display.replace(drawing)
+                    display.visible = true
+                })
+                index++
+            }
+            state.did_refresh(rotation)
+        }
+    } else {
+        state.markers.clear()
+        state.has_rotation = false
+        world.update<Scene2D.Canvas>(state.background, func(display:&Scene2D.Canvas) {
+            display.visible = false
+        })
+        for entity in state.displays {
+            world.update<Scene2D.Canvas>(entity, func(display:&Scene2D.Canvas) {
+                display.visible = false
+            })
+        }
+    }
+}
+
+func stop_viewport_axis(application:Application) {
+    var removed = application.resources().remove<ViewportAxisState>()
+    assert(removed != null)
+}
+
+package func active_camera_rotation(
+    world:@ECS.World
+) Math.Quat? {
+    var selected:Math.Quat? = null
+    var selected_order = 0
+    for entity in world.entities() {
+        if world.has<Transform3D>(entity) && world.has<Camera>(entity) {
+            let camera = world.get<Camera>(entity)
+            if camera.is_active() &&
+                (selected == null || camera.render_order() < selected_order)
+            {
+                selected = world.get<Transform3D>(entity).rotation
+                selected_order = camera.render_order()
+            }
+        }
+    }
+    return selected
+}
+
+package func viewport_axis_markers(
+    settings:ViewportAxis.Settings,
+    rotation:Math.Quat
+) ViewportAxisMarker[] {
+    let center = Math.Vec2(settings.size * 0.5)
+    let length = axis_length(settings)
+    let view_rotation = rotation.inverted()
+    var markers:ViewportAxisMarker[] = []
+    append_axis(
+        markers,
+        center,
+        length,
+        view_rotation.rotate(Math.Vec3.right()),
+        settings.x_color,
+        "X",
+        View.right,
+        View.left
+    )
+    append_axis(
+        markers,
+        center,
+        length,
+        view_rotation.rotate(Math.Vec3.up()),
+        settings.y_color,
+        "Y",
+        View.top,
+        View.bottom
+    )
+    append_axis(
+        markers,
+        center,
+        length,
+        view_rotation.rotate(Math.Vec3.back()),
+        settings.z_color,
+        "Z",
+        View.front,
+        View.back
+    )
+    sort_markers(markers)
+    return markers
+}
+
+func append_axis(
+    markers:&ViewportAxisMarker[],
+    center:Math.Vec2,
+    length:float,
+    direction:Math.Vec3,
+    color:Color,
+    label:str,
+    positive_view:View,
+    negative_view:View
+) {
+    let projected = Math.Vec2(direction.x, -direction.y).multiply(length)
+    markers.append(ViewportAxisMarker(
+        position:center.add(projected),
+        depth:direction.z,
+        view:positive_view,
+        color:color,
+        label:label,
+        positive:true
+    ))
+    markers.append(ViewportAxisMarker(
+        position:center.subtract(projected),
+        depth:-direction.z,
+        view:negative_view,
+        color:color,
+        label:label,
+        positive:false
+    ))
+}
+
+func sort_markers(markers:&ViewportAxisMarker[]) {
+    var index = 1
+    while index < markers.count() {
+        var cursor = index
+        while cursor > 0 && markers[cursor].depth < markers[cursor - 1].depth {
+            markers.swap(cursor, cursor - 1)
+            cursor--
+        }
+        index++
+    }
+}
+
+package func marker_radius(settings:ViewportAxis.Settings) float {
+    return settings.size * 0.108
+}
+
+package func axis_length(settings:ViewportAxis.Settings) float {
+    return settings.size * 0.35
+}
+
+package func orbit_radius(settings:ViewportAxis.Settings) float {
+    return settings.size * 0.485
+}
+
+package func negative_axis_color(color:Color) Color {
+    return Color.rgba(color.r * 0.75, color.g * 0.75, color.b * 0.75, 1.0)
+}
+
+func viewport_axis_background_canvas(state:@ViewportAxisState) Canvas {
+    let settings = copy state.settings
+    let center = Math.Vec2(settings.size * 0.5)
+    var drawing = Canvas()
+    var color = settings.background
+    if state.orbit_hovered { color = settings.hover_background }
+    drawing.paint(func(painter:&Canvas.Painter) {
+        if color.a > 0.0 {
+            painter.fill(
+                Canvas.Circle(center, orbit_radius(settings)),
+                Canvas.Fill.solid(color)
+            )
+        }
+    })
+    return drawing
+}
+
+package func viewport_axis_marker_canvas(
+    state:@ViewportAxisState,
+    marker:ViewportAxisMarker
+) Canvas {
+    let settings = copy state.settings
+    let center = Math.Vec2(settings.size * 0.5)
+    let radius = marker_radius(settings)
+    let line_width = settings.size * 0.012
+    let label_size = settings.size * 0.132
+    let outline_width = settings.size * 0.021
+    var drawing = Canvas()
+    var label_style = Canvas.TextStyle(
+        size:label_size,
+        color:Color.slate_950(),
+        alignment:Canvas.TextAlignment.center,
+        weight:Canvas.TextWeight.bold
+    )
+    let label_metrics = drawing.measure_text("X", label_style)
+    drawing.paint(func(painter:&Canvas.Painter) {
+        if marker.positive && marker.position.distance(center) > 0.5 {
+            painter.stroke(
+                Canvas.Line(center, marker.position),
+                Canvas.Stroke(marker.color, line_width)..cap = Canvas.StrokeCap.round
+            )
+        }
+        if state.hovered >= 0 && state.markers[state.hovered].view == marker.view {
+            painter.fill(
+                Canvas.Circle(marker.position, radius + settings.size * 0.042),
+                Canvas.Fill.solid(marker.color.with_alpha(0.24))
+            )
+        }
+        if marker.positive {
+            painter.fill(
+                Canvas.Circle(marker.position, radius),
+                Canvas.Fill.solid(marker.color)
+            )
+            painter.text(
+                marker.label,
+                Math.Vec2(
+                    marker.position.x,
+                    marker.position.y - label_metrics.height * 0.5
+                ),
+                label_style
+            )
+        } else {
+            painter.fill(
+                Canvas.Circle(marker.position, radius),
+                Canvas.Fill.solid(negative_axis_color(marker.color))
+            )
+            painter.stroke(
+                Canvas.Circle(marker.position, radius - outline_width * 0.5),
+                Canvas.Stroke(marker.color, outline_width)
+            )
+        }
+    })
+    return drawing
+}

@@ -2,7 +2,8 @@
 
 `GFX.Scene3D` provides retained 3D scenes for GFX: procedural geometry,
 imported-model instantiation, cameras, materials, lighting, shadows, selection,
-gizmos, sprites, scatter, tone mapping, and the built-in GPU renderer.
+gizmos, a Blender-style viewport axis, sprites, scatter, tone mapping, and the
+built-in GPU renderer.
 
 ```text
 silex install GFX.Scene3D

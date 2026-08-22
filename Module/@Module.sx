@@ -35,6 +35,8 @@ public use GFX.Scene3D.ToneMapping.ToneMapping
 public use GFX.Scene3D.Transform.Transform
 public use GFX.Scene3D.TubeProjectorLight.TubeProjectorLight
 public use GFX.Scene3D.TubeProjectorLightGizmo.TubeProjectorLightGizmo
+public use GFX.Scene3D.ViewportAxis.ViewportAxis
+public use GFX.Scene3D.ViewportAxisController.ViewportAxisController
 public use GFX.Scene3D.ViewportCamera.ViewportCamera
 
 contribute GFX.Components {
@@ -68,6 +70,8 @@ contribute GFX.Plugins {
     public use GFX.Scene3D.Grid as Grid3D
     public use GFX.Scene3D.Catalogs.FirstPersonCamera3D
     public use GFX.Scene3D.Plugin as Scene3D
+    public use GFX.Scene3D.ViewportAxis as ViewportAxis3D
+    public use GFX.Scene3D.ViewportAxisController as ViewportAxisController3D
     public use GFX.Scene3D.ViewportCamera as ViewportCamera3D
     public use GFX.Scene3D.ViewportCamera.Controls as ViewportCamera3DControls
     public use GFX.Scene3D.ViewportCamera.View as ViewportCamera3DView

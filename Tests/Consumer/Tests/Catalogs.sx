@@ -19,6 +19,8 @@ test "consume Scene3D directly and through the GFX catalogs" {
     let viewport = Plugins.ViewportCamera3D(Plugins.ViewportCamera3D.Settings(
         distance:5.0
     ))
+    let viewport_axis = Plugins.ViewportAxis3D()
+    let viewport_axis_controller = Plugins.ViewportAxisController3D()
     let first_person = Plugins.FirstPersonCamera3D(
         Plugins.FirstPersonCamera3D.Settings()..move_speed = 4.0
     )
@@ -28,5 +30,7 @@ test "consume Scene3D directly and through the GFX catalogs" {
     assert(scene.id() == "GFX.Scene3D.Plugin")
     assert(grid.id() == "GFX.Scene3D.Grid")
     assert(viewport.id() == "GFX.Scene3D.ViewportCamera")
+    assert(viewport_axis.id() == "GFX.Scene3D.ViewportAxis")
+    assert(viewport_axis_controller.id() == "GFX.Scene3D.ViewportAxisController")
     assert(first_person.id() == "GFX.Scene3D.FirstPersonCamera")
 }

@@ -1,0 +1,181 @@
+use GFX.Application
+use GFX.Color
+use GFX.Components
+use GFX.ECS
+use GFX.Plugins
+use GFX.Resources
+use GFX.Scene3D.ViewportAxis.axis_length
+use GFX.Scene3D.ViewportAxis.marker_radius
+use GFX.Scene3D.ViewportAxis.negative_axis_color
+use GFX.Scene3D.ViewportAxis.orbit_radius
+use GFX.Scene3D.ViewportAxis.ViewportAxisState
+use GFX.Scene3D.ViewportAxis.viewport_axis_marker_canvas
+use GFX.Scene3D.ViewportAxis.viewport_axis_markers
+use GFX.Scene3D.ViewportCamera.View
+use STD.Math
+
+struct Probe {
+    var overlays:int
+    var width:int
+    var height:int
+    var vertices:int
+    var has_text:bool
+    var draw_calls:int
+    var nonzero_depths:int
+}
+
+test "fill negative markers with an opaque axis color darkened by one quarter" {
+    let color = Color.rgb(0.8, 0.4, 0.2)
+    let negative = negative_axis_color(color)
+
+    assert(Math.nearly_equal(negative.r, 0.6))
+    assert(Math.nearly_equal(negative.g, 0.3))
+    assert(Math.nearly_equal(negative.b, 0.15))
+    assert(Math.nearly_equal(negative.a, 1.0))
+}
+
+func inspect_viewport_axis(
+    probe:&Probe,
+    world:@Resources.World,
+    renderer:@Resources.Renderer,
+    controller:&Application.Controller
+) {
+    for entity in world.entities() {
+        if world.has<Components.Canvas>(entity) {
+            let overlay = world.get<Components.Canvas>(entity)
+            var snapshot = overlay.snapshot()
+            probe.overlays++
+            probe.width = overlay.width()
+            probe.height = overlay.height()
+            probe.vertices += snapshot.geometry().vertex_count()
+            if snapshot.has_text() { probe.has_text = true }
+            if !Math.nearly_equal(overlay.depth, 0.0) { probe.nonzero_depths++ }
+        }
+    }
+    probe.draw_calls = renderer.stats().draw_calls()
+    controller.stop()
+}
+
+test "keep negative markers within the same outer diameter and omit their axis line" {
+    let settings = Plugins.ViewportAxis3D.Settings()
+    var state = ViewportAxisState(settings)
+    state.markers = viewport_axis_markers(settings, Math.Quat())
+    let radius = marker_radius(settings)
+    var checked_positive = false
+    var checked_negative = false
+
+    for marker in state.markers {
+        if marker.view == View.right || marker.view == View.left {
+            var drawing = viewport_axis_marker_canvas(state, marker)
+            let geometry = drawing.snapshot(
+                Math.round(settings.size) as int,
+                Math.round(settings.size) as int
+            ).geometry()
+            var maximum_distance = 0.0
+            var minimum_x = marker.position.x
+            var maximum_x = marker.position.x
+            for vertex in geometry.vertices() {
+                let position = Math.Vec2(vertex.position.x, vertex.position.y)
+                maximum_distance = Math.max(
+                    maximum_distance,
+                    position.distance(marker.position)
+                )
+                minimum_x = Math.min(minimum_x, position.x)
+                maximum_x = Math.max(maximum_x, position.x)
+            }
+            if marker.positive {
+                assert(maximum_distance > radius)
+                checked_positive = true
+            } else {
+                let antialiased_radius = radius + 1.0
+                assert(maximum_distance <= antialiased_radius * 1.415)
+                assert(maximum_x - minimum_x >= antialiased_radius * 2.0 - 0.05)
+                assert(maximum_x - minimum_x <= antialiased_radius * 2.0 + 0.05)
+                checked_negative = true
+            }
+        }
+    }
+    assert(checked_positive)
+    assert(checked_negative)
+}
+
+test "reserve the global circle for viewport-camera orbit" {
+    let settings = Plugins.ViewportAxis3D.Settings()
+    var state = ViewportAxisState(settings)
+    let viewport = Math.Vec2(320.0, 240.0)
+    let origin = Math.Vec2(
+        viewport.x - settings.margin.x - settings.size,
+        settings.margin.y
+    )
+
+    assert(state.is_inside_orbit(
+        origin.add(Math.Vec2(settings.size * 0.5)),
+        viewport
+    ))
+    assert(!state.is_inside_orbit(origin, viewport))
+}
+
+test "keep every axis marker inside the global circle with visual padding" {
+    let settings = Plugins.ViewportAxis3D.Settings()
+    let padding = orbit_radius(settings) -
+        axis_length(settings) - marker_radius(settings)
+
+    assert(padding >= 1.5)
+}
+
+test "project the six viewport axes relative to the camera" {
+    let settings = Plugins.ViewportAxis3D.Settings()
+    let markers = viewport_axis_markers(settings, Math.Quat())
+    let center = Math.Vec2(settings.size * 0.5)
+
+    assert(markers.count() == 6)
+    assert(markers[0].view == View.back)
+    assert(markers[0].position.nearly_equal(center))
+    assert(markers[5].view == View.front)
+    assert(markers[5].position.nearly_equal(center))
+
+    var right = Math.Vec2()
+    var top = Math.Vec2()
+    for marker in markers {
+        if marker.view == View.right { right = marker.position }
+        if marker.view == View.top { top = marker.position }
+    }
+    assert(right.x > center.x)
+    assert(Math.nearly_equal(right.y, center.y))
+    assert(top.y < center.y)
+    assert(Math.nearly_equal(top.x, center.x))
+}
+
+test "render the viewport axis overlay through the public plugins" {
+    var application = Application()
+        ..add_plugin(Plugins.Window(Plugins.Window.Settings()
+            ..title = "Viewport axis test"
+            ..width = 320
+            ..height = 240
+            ..hidden = true
+        ))
+        ..add_plugin(Plugins.Scene3D())
+        ..add_plugin(Plugins.ViewportCamera3D())
+        ..add_plugin(Plugins.ViewportAxis3D())
+        ..add_plugin(Plugins.ViewportAxisController3D())
+        ..add_after_system(Application.Schedule.render, inspect_viewport_axis)
+    var resources = application.resources()
+    resources.insert(Probe(
+        overlays:0,
+        width:0,
+        height:0,
+        vertices:0,
+        has_text:false,
+        draw_calls:0,
+        nonzero_depths:0
+    ))
+
+    assert(application.run() == 0)
+    assert(resources.get<Probe>().overlays == 7)
+    assert(resources.get<Probe>().width == 68)
+    assert(resources.get<Probe>().height == 68)
+    assert(resources.get<Probe>().vertices > 0)
+    assert(resources.get<Probe>().has_text)
+    assert(resources.get<Probe>().draw_calls > 0)
+    assert(resources.get<Probe>().nonzero_depths == 0)
+}

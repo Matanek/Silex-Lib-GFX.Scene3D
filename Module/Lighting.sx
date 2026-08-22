@@ -46,27 +46,32 @@ class Frame {
     private var lights:Light[]
     private var shadow_count:int
     private var found_light_component:bool
+    private var default_studio:bool
 
     init() {
         self.current_ambient = Color(r:1.0, g:1.0, b:1.0, a:0.07)
         self.lights = []
         self.shadow_count = 0
         self.found_light_component = false
+        self.default_studio = false
     }
 
     func all() @Light[..] { return @self.lights[0:self.lights.count()] }
     func count() int { return self.lights.count() }
     func shadowed_count() int { return self.shadow_count }
     func ambient() Color { return self.current_ambient }
+    func uses_default_studio() bool { return self.default_studio }
 
-    func rebuild(world:@ECS.World) {
+    func rebuild(world:@ECS.World, view_rotation:Math.Quat? = null) {
         self.current_ambient = Color(r:1.0, g:1.0, b:1.0, a:0.07)
         self.lights.clear()
         self.shadow_count = 0
         self.found_light_component = false
+        self.default_studio = false
         var ambient_selected = false
         for entity in world.entities() {
             if world.has<AmbientLight>(entity) {
+                self.found_light_component = true
                 let ambient = world.get<AmbientLight>(entity)
                 if !ambient_selected {
                     ambient_selected = true
@@ -107,29 +112,28 @@ class Frame {
             }
         }
         if self.lights.count() == 0 && !self.found_light_component {
-            self.append(Light(
-                kind:Kind.sun,
-                direction:Math.Vec3(-0.45, -0.9, -0.35).normalized(),
-                position:Math.Vec3(),
-                color:Color.white(),
-                intensity:1.0,
-                reach:1.0,
-                angle:Math.radians(18.0),
-                projection_angle:Math.radians(28.0),
-                projection_size:Math.Vec3(2.0, 2.0, 4.0),
-                projection_radius:1.0,
-                influence_softness:0.25,
-                falloff:1.0,
-                shadow_caster_distance:0.0,
-                shadow_center:Math.Vec3(0.0, 0.8, 0.0),
-                shadow_size:Math.Vec2(8.0),
-                shadow_depth:12.0,
-                shadow_distance:0.0,
-                shadow_cascade_distances:Math.Vec4(),
-                shadow_follows_camera:true,
-                shadow:Shadow(enabled:false)
-            ))
+            self.use_default_studio(view_rotation)
         }
+    }
+
+    private func use_default_studio(view_rotation:Math.Quat?) {
+        self.default_studio = true
+        self.current_ambient = Color(r:0.92, g:0.96, b:1.0, a:0.14)
+        self.append(studio_light(
+            studio_direction(view_rotation, Math.Vec3(-0.45, -0.9, -0.35)),
+            Color.white(),
+            1.15
+        ))
+        self.append(studio_light(
+            studio_direction(view_rotation, Math.Vec3(0.65, -0.35, -0.2)),
+            Color.sky_200(),
+            0.42
+        ))
+        self.append(studio_light(
+            studio_direction(view_rotation, Math.Vec3(0.1, -0.25, 0.95)),
+            Color.orange_100(),
+            0.24
+        ))
     }
 
     private func append(light:Light) {
@@ -293,6 +297,36 @@ class Frame {
             ))
         }
     }
+}
+
+func studio_direction(rotation:Math.Quat?, direction:Math.Vec3) Math.Vec3 {
+    if let view = rotation { return view.rotate(direction).normalized() }
+    return direction.normalized()
+}
+
+func studio_light(direction:Math.Vec3, color:Color, intensity:float) Light {
+    return Light(
+        kind:Kind.sun,
+        direction:direction,
+        position:Math.Vec3(),
+        color:color,
+        intensity:intensity,
+        reach:1.0,
+        angle:Math.radians(18.0),
+        projection_angle:Math.radians(28.0),
+        projection_size:Math.Vec3(2.0, 2.0, 4.0),
+        projection_radius:1.0,
+        influence_softness:0.25,
+        falloff:1.0,
+        shadow_caster_distance:0.0,
+        shadow_center:Math.Vec3(0.0, 0.8, 0.0),
+        shadow_size:Math.Vec2(8.0),
+        shadow_depth:12.0,
+        shadow_distance:0.0,
+        shadow_cascade_distances:Math.Vec4(),
+        shadow_follows_camera:true,
+        shadow:Shadow(enabled:false)
+    )
 }
 
 func safe_direction(value:Math.Vec3) Math.Vec3 {

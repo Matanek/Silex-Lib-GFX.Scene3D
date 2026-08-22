@@ -16,6 +16,47 @@ Mesh, grid, sprite, lighting, shadow, selection, and outline shaders live under
 use these assets as references, or provide its own shaders through `GFX.GPU`.
 `Selection` and `TransformGizmo` remain explicit subdomains of `Scene3D`.
 
+When a scene contains no ambient, sun, point, spot, cube-projector, or
+tube-projector light component, the renderer supplies a camera-relative studio
+rig with neutral ambient, key, fill, and rim illumination. Adding any explicit
+light component disables this viewport fallback.
+
+## Viewport axis
+
+`ViewportAxis` displays the six world-axis directions relative to the active
+3D camera. Positive X, Y, and Z directions use filled labeled markers; their
+opposites use outlined markers. The overlay is presented in the top-right
+logical viewport through the existing Canvas and Scene2D capabilities.
+
+`ViewportAxisController` is deliberately separate. It tracks marker hover,
+maps a left click to the corresponding front, back, left, right, top, or bottom
+orientation while preserving the perspective projection and orbit distance,
+and orbits the camera when the pointer drags the circular background. When the
+application has no `ViewportCamera` resource, it leaves the display active and
+performs no camera action.
+
+```silex
+application
+    ..add_plugin(Scene3D.ViewportCamera())
+    ..add_plugin(Scene3D.ViewportAxis())
+    ..add_plugin(Scene3D.ViewportAxisController())
+```
+
+The flattened plugin catalog keeps dimensional names where 2D and 3D concepts
+can meet:
+
+```silex
+application
+    ..add_plugin(Plugins.ViewportCamera3D())
+    ..add_plugin(Plugins.ViewportAxis3D())
+    ..add_plugin(Plugins.ViewportAxisController3D())
+```
+
+`ViewportAxis.Settings` configures its top-right margin, square size, render
+layer, resting and hovered circular backgrounds, and X/Y/Z colors.
+`ViewportAxisController.Settings.button` selects the pointer button used for
+preset views and circular-background orbit.
+
 `Scene3D.Plugin` installs the ECS and generic rendering dependencies, owns the
 built-in mesh cache, and registers a depth-aware Scene3D pass. Applications
 remain free to omit it and consume `World`, `Meshes`, camera, material, and

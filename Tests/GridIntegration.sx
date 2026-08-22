@@ -1,0 +1,56 @@
+use GFX.Application
+use GFX.Color
+use GFX.ECS
+use GFX.Rendering.Renderer as RenderingRenderer
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+struct Probe {
+    var draw_calls:int
+    var uniform_bytes:int
+}
+
+func create_grid_scene(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    let cube = meshes.add(Scene3D.Geometry.Cube.make())
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.5, 0.0)))
+        ..with(Scene3D.Mesh(cube))
+        ..with(Scene3D.Material(albedo:Color.orange_400()))
+    )
+}
+
+func inspect_grid_after_mesh(
+    probe:&Probe,
+    renderer:@RenderingRenderer,
+    controller:&Application.Controller
+) {
+    probe.draw_calls = renderer.stats().draw_calls()
+    probe.uniform_bytes = renderer.stats().uniform_bytes()
+    controller.stop()
+}
+
+test "bind the viewport grid after rendering a lit mesh" {
+    var application = Application()
+        ..add_plugin(WindowPlugin(WindowPlugin.Settings()
+            ..title = "Scene3D grid integration"
+            ..width = 96
+            ..height = 96
+            ..hidden = true
+        ))
+        ..add_plugin(Scene3D.Plugin())
+        ..add_plugin(Scene3D.Grid())
+        ..add_plugin(Scene3D.ViewportCamera(Scene3D.ViewportCamera.Settings()
+            ..distance = 5.0
+            ..yaw = Math.radians(35.0)
+            ..pitch = Math.radians(-28.0)
+        ))
+        ..add_system(Application.Schedule.startup, create_grid_scene)
+        ..add_after_system(Application.Schedule.render, inspect_grid_after_mesh)
+    var resources = application.resources()
+    resources.insert(Probe(draw_calls:0, uniform_bytes:0))
+
+    assert(application.run() == 0)
+    assert(resources.get<Probe>().draw_calls >= 2)
+    assert(resources.get<Probe>().uniform_bytes >= 5824)
+}

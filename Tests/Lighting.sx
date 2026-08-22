@@ -1,6 +1,34 @@
 use GFX.Color
+use GFX.ECS
 use GFX.Scene3D
+use GFX.Scene3D.Lighting.Frame
 use STD.Math
+
+test "provide a camera-relative studio rig when the scene has no light" {
+    var world = ECS.World()
+    var lighting = Frame()
+    lighting.rebuild(world, Math.Quat.angle_axis(
+        Math.radians(35.0),
+        Math.Vec3.up()
+    ))
+
+    assert(lighting.uses_default_studio())
+    assert(lighting.count() == 3)
+    assert(Math.nearly_equal(lighting.ambient().a, 0.14))
+}
+
+test "let any explicit light component replace the default studio rig" {
+    var world = ECS.World()
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.AmbientLight(intensity:0.2))
+    )
+    var lighting = Frame()
+    lighting.rebuild(world)
+
+    assert(!lighting.uses_default_studio())
+    assert(lighting.count() == 0)
+    assert(Math.nearly_equal(lighting.ambient().a, 0.2))
+}
 
 test "keep shadows and gizmos in the public Scene3D lighting vocabulary" {
     let shadow = Scene3D.Shadow(bias:0.00085, normal_offset:0.003, softness:0.5)

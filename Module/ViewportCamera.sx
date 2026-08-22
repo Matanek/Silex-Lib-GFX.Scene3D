@@ -174,7 +174,7 @@ public class Controller {
         }
     }
 
-    module func align_orbit(view:View) {
+    package func align_orbit(view:View) {
         self.set_view(view)
         self.current_view = View.perspective
         self.axial_orbit = view == View.top || view == View.bottom

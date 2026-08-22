@@ -1,0 +1,113 @@
+use GFX.Application
+use GFX.Application.Plugin as PluginProtocol
+use GFX.Application.Schedule
+use GFX.Input
+use GFX.Input.Plugin as InputPlugin
+use GFX.Input.State as InputState
+use GFX.Scene3D.ViewportAxis.ViewportAxisState
+use GFX.Scene3D.ViewportCamera.Controller as CameraController
+use GFX.Scene3D.ViewportCamera.View
+use GFX.Window
+use STD.Math
+
+package class ViewportAxisControllerState {
+    let settings:ViewportAxisController.Settings
+    var orbiting:bool
+
+    init(settings:ViewportAxisController.Settings) {
+        self.settings = settings
+        self.orbiting = false
+    }
+}
+
+public struct ViewportAxisController:PluginProtocol {
+    struct Settings {
+        var button:Input.MouseButton
+
+        init() {
+            self.button = Input.MouseButton.left
+        }
+    }
+
+    private let settings:Settings
+
+    init(
+        settings:ViewportAxisController.Settings = ViewportAxisController.Settings()
+    ) {
+        self.settings = settings
+    }
+
+    func id() str { return "GFX.Scene3D.ViewportAxisController" }
+
+    func build(application:&Application) {
+        application.add_plugin(InputPlugin())
+        application.add_resource(ViewportAxisControllerState(self.settings))
+        application.add_after_system(Schedule.pre_update, update_viewport_axis_controller)
+        application.add_system(Schedule.shutdown, stop_viewport_axis_controller)
+    }
+}
+
+func update_viewport_axis_controller(application:Application) {
+    var resources = application.resources()
+    var mouse = Math.Vec2()
+    var viewport = Math.Vec2()
+    var delta = Math.Vec2()
+    var pressed = false
+    var down = false
+    var released = false
+    var ready = false
+    {
+        if let input = resources.try_get<InputState>() {
+            if let window = resources.try_get<Window>() {
+                if let controller_settings =
+                    resources.try_get<ViewportAxisControllerState>()
+                {
+                    mouse = input.mouse_position()
+                    viewport = window.size()
+                    delta = input.mouse_delta()
+                    pressed = input.is_pressed(controller_settings.settings.button)
+                    down = input.is_down(controller_settings.settings.button)
+                    released = input.is_released(controller_settings.settings.button)
+                    ready = true
+                }
+            }
+        }
+    }
+    if !ready { return }
+    var selected:View? = null
+    var inside_orbit = false
+    {
+        if var axis = resources.try_get_mut<ViewportAxisState>() {
+            axis.hovered = axis.hit_test(mouse, viewport)
+            inside_orbit = axis.is_inside_orbit(mouse, viewport)
+            if pressed { selected = axis.selected_view(axis.hovered) }
+        }
+    }
+    let has_camera = resources.has<CameraController>()
+    var orbiting = false
+    {
+        if var interaction = resources.try_get_mut<ViewportAxisControllerState>() {
+            if pressed {
+                interaction.orbiting = selected == null && inside_orbit && has_camera
+            }
+            if released { interaction.orbiting = false }
+            orbiting = interaction.orbiting
+        }
+    }
+    {
+        if var axis = resources.try_get_mut<ViewportAxisState>() {
+            axis.orbit_hovered = inside_orbit || orbiting
+        }
+    }
+    if var camera = resources.try_get_mut<CameraController>() {
+        if let view = selected { camera.align_orbit(view) }
+        if orbiting && down {
+            camera.orbit(delta)
+        }
+    }
+}
+
+func stop_viewport_axis_controller(application:Application) {
+    var removed = application.resources().remove<ViewportAxisControllerState>()
+    assert(removed != null)
+}

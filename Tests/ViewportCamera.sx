@@ -31,6 +31,15 @@ test "switch a 3D viewport camera between axial and perspective views" {
     assert(!controller.camera().is_orthographic())
 }
 
+test "align the viewport helper like an orbit without changing zoom or projection" {
+    var controller = Controller(ViewportCameraPlugin.Settings(distance:5.0))
+    controller.align_orbit(View.top)
+
+    assert(controller.view() == View.perspective)
+    assert(Math.nearly_equal(controller.distance(), 5.0))
+    assert(!controller.camera().is_orthographic())
+}
+
 test "pan a 3D viewport camera in its view plane" {
     var camera = Controller(ViewportCameraPlugin.Settings(distance:5.0, pitch:0.0, pan_sensitivity:0.1))
     camera.pan(Math.Vec2(4.0, -2.0))

@@ -214,9 +214,11 @@ class Renderer {
         for cache in self.instance_models { cache.used = false }
         self.camera_ready = false
         self.camera_view = null
-        self.lighting.rebuild(world)
-        self.gizmos.rebuild(world)
         self.find_camera(world)
+        var view_rotation:Math.Quat? = null
+        if let camera = self.camera_view { view_rotation = camera.rotation }
+        self.lighting.rebuild(world, view_rotation)
+        self.gizmos.rebuild(world)
     }
 
     func collect(
@@ -974,6 +976,7 @@ class Renderer {
                     configured
                 )
                 pass.vertex_uniform(0, uniform, 224)
+                pass.fragment_uniform(0, uniform, 224)
                 pass.draw(3)
             }
         }
