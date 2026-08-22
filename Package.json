@@ -1,7 +1,9 @@
 {
   "name": "GFX.Scene3D",
-  "version": "0.1.0",
-  "requires": { "silex": ">=0.38.36" },
+  "version": "0.2.0",
+  "description": "Retained 3D scenes with geometry, materials, lighting, cameras, and GPU rendering.",
+  "authors": ["Matanek"],
+  "requires": { "silex": ">=0.39.0" },
   "dependencies": {
     "GFX": "^0.37.0",
     "GFX.Assets": "^0.1.0",
