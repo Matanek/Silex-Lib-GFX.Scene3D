@@ -26,12 +26,14 @@ struct Benchmark {
     let grass_count:int
     let duration:float
     let present_mode:str
+    let focus_mode:str
 
     init(
         moving:bool = false,
         grass_count:int = 5000,
         duration:float = 5.0,
-        present_mode:str = "immediate"
+        present_mode:str = "immediate",
+        focus_mode:str = "not-focusable"
     ) {
         self.clock = Clock()
         self.elapsed = 0.0
@@ -44,6 +46,7 @@ struct Benchmark {
         self.grass_count = grass_count
         self.duration = duration
         self.present_mode = present_mode
+        self.focus_mode = focus_mode
     }
 }
 
@@ -394,7 +397,7 @@ func benchmark(
         print(
             "SILEX_GFX_WORLD seconds=$(benchmark.elapsed) " +
             "present=$(benchmark.present_mode) grass=$(benchmark.grass_count) " +
-            "moving=$(benchmark.moving) " +
+            "moving=$(benchmark.moving) focus=$(benchmark.focus_mode) " +
             "fps=$(benchmark.sample_frames as float / benchmark.sample_elapsed) " +
             "slowest_ms=$(benchmark.slowest_frame * 1000.0) " +
             "pixels=$(window.pixel_size().x)x$(window.pixel_size().y) " +
@@ -490,11 +493,14 @@ func main() {
         var present_mode = "immediate"
         if synchronized_benchmark { present_mode = "synchronized" }
         elif mailbox_benchmark { present_mode = "mailbox" }
+        var focus_mode = "not-focusable"
+        if focused_benchmark { focus_mode = "focused" }
         application.add_resource(Benchmark(
             moving:moving_benchmark || soak_benchmark,
             grass_count:grass_count,
             duration:duration,
-            present_mode:present_mode
+            present_mode:present_mode,
+            focus_mode:focus_mode
         ))
         if moving_benchmark || soak_benchmark {
             application.add_system(Application.Schedule.update, move_benchmark_camera)
