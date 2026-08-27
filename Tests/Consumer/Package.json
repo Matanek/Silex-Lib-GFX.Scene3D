@@ -1,4 +1,5 @@
 {
+  "sources": "Tests",
   "dependencies": {
     "GFX": "^0.37.0",
     "GFX.Scene3D": "^0.1.0"
