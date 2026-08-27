@@ -35,5 +35,7 @@ Application()
 
 Scene3D contributes its owned declarations to `GFX.Components`, `GFX.Plugins`,
 and `GFX.Resources` without changing their public names. The package owns its
-shaders, tone-mapping tables, model examples, tests, tools, and documentation.
-See [Docs/README.md](Docs/README.md) for the complete API and rendering model.
+shaders, tone-mapping tables, package assets, benchmark-capable World example,
+tests, tools, and documentation. Its focused visual demonstrations live in
+[Silex-Examples](https://github.com/Matanek/Silex-Examples). See
+[Docs/README.md](Docs/README.md) for the complete API and rendering model.
