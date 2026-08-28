@@ -12,4 +12,4 @@ silex install GFX.Scene3D
 - [Documentation française](Docs/FR/README.md)
 - [English documentation](Docs/EN/README.md)
 
-Le package nécessite Silex 0.39 ou une version ultérieure.
+Le package nécessite Silex 0.43.0 ou une version ultérieure.
