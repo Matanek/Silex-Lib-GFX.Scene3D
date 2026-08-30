@@ -34,7 +34,7 @@ public struct Plugin:PluginProtocol {
             rendering.add_pass("GFX.Scene3D", render_scene, depth:true)
         }
         host.add_system(Schedule.startup, start_scene)
-        if !host.has_plugin("GFX.Application.Scenes") {
+        if !host.has_plugin("GFX.Application.SceneManager") {
             self.add_content_systems(host)
         }
         host.add_system(Schedule.shutdown, stop_scene)

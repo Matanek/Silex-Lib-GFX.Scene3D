@@ -68,7 +68,7 @@ func inspect_content(
     canvases:ECS.Query<(@LocalContent, @Scene2D.Canvas)>,
     mesh_entities:ECS.Query<(@LocalContent, @Scene3D.Mesh)>,
     renderer:@Renderer,
-    scenes:&Application.Scenes,
+    scenes:&Application.SceneManager,
     probe:&Probe,
     controller:&Application.Controller
 ) {
@@ -125,7 +125,7 @@ test "isolate successive scenes that compose 2D and 3D content" {
         ))
         ..add_plugin(Scene2D.Plugin())
         ..add_plugin(Scene3D.Plugin())
-        ..add_plugin(Application.Scenes(initial))
+        ..add_plugin(Application.SceneManager(initial))
 
     assert(application.run() == 0)
     assert(probe.starts == 2)

@@ -71,6 +71,7 @@ contribute GFX.Plugins {
     public use GFX.Scene3D.Grid as Grid3D
     public use GFX.Scene3D.Catalogs.FirstPersonCamera3D
     public use GFX.Scene3D.Plugin as Scene3D
+    public use GFX.Scene3D.Plugin.Content as Scene3DContent
     public use GFX.Scene3D.ViewportAxis as ViewportAxis3D
     public use GFX.Scene3D.ViewportAxisController as ViewportAxisController3D
     public use GFX.Scene3D.ViewportCamera as ViewportCamera3D

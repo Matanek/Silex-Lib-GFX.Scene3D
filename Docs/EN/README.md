@@ -35,17 +35,12 @@ and orbits the camera when the pointer drags the circular background. When the
 application has no `ViewportCamera` resource, it leaves the display active and
 performs no camera action.
 
-```silex
-application
-    ..add_plugin(Scene3D.ViewportCamera())
-    ..add_plugin(Scene3D.ViewportAxis())
-    ..add_plugin(Scene3D.ViewportAxisController())
-```
-
 The flattened plugin catalog keeps dimensional names where 2D and 3D concepts
 can meet:
 
 ```silex
+use GFX.Plugins
+
 application
     ..add_plugin(Plugins.ViewportCamera3D())
     ..add_plugin(Plugins.ViewportAxis3D())
@@ -57,28 +52,29 @@ layer, resting and hovered circular backgrounds, and X/Y/Z colors.
 `ViewportAxisController.Settings.button` selects the pointer button used for
 preset views and circular-background orbit.
 
-`Scene3D.Plugin` installs the ECS and generic rendering dependencies, owns the
+`Plugins.Scene3D` installs the ECS and generic rendering dependencies, owns the
 built-in mesh cache, and registers a depth-aware Scene3D pass. Applications
 remain free to omit it and consume `World`, `Meshes`, camera, material, and
 light values from an alternative renderer.
 
 ```silex
-application.add_plugin(Scene3D.Plugin())
+application.add_plugin(Plugins.Scene3D())
 ```
 
-With `GFX.Application.Scenes`, this Plugin remains global so catalogs,
+With `Plugins.SceneManager`, this Plugin remains global so catalogs,
 pipelines, and batches survive transitions. Each scene containing meshes adds
-`Scene3D.Content()`; its preparation systems then read the local `World`.
-`Scene2D.Content()` may be added to the same scene: both domains prepare one
-frame without creating competing application contexts.
+`Plugins.Scene3DContent()`; its preparation systems then read the local
+`World`. `Plugins.Scene2DContent()` may be added to the same scene: both domains
+prepare one frame without creating competing application contexts. These
+Plugins are directly discoverable in the `GFX.Plugins` catalog.
 
 ```silex
 scene
-    ..add_plugin(Scene2D.Content())
-    ..add_plugin(Scene3D.Content())
+    ..add_plugin(Plugins.Scene2DContent())
+    ..add_plugin(Plugins.Scene3DContent())
 ```
 
-`Scene3D.Content()` requires `Scene3D.Plugin()` to be resolved on the
+`Plugins.Scene3DContent()` requires `Plugins.Scene3D()` to be resolved on the
 Application; the scene refuses to mount before running any system when this
 global capability is missing.
 

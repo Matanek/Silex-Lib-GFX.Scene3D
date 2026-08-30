@@ -21,45 +21,42 @@ repli.
 `ViewportAxis` affiche les six directions du monde dans le coin supérieur
 droit. Son controller séparé gère survol, vues prédéfinies et orbite.
 
-```silex
-application
-    ..add_plugin(Scene3D.ViewportCamera())
-    ..add_plugin(Scene3D.ViewportAxis())
-    ..add_plugin(Scene3D.ViewportAxisController())
-```
-
 Le catalogue aplati conserve les suffixes dimensionnels :
 
 ```silex
+use GFX.Plugins
+
 application
     ..add_plugin(Plugins.ViewportCamera3D())
     ..add_plugin(Plugins.ViewportAxis3D())
     ..add_plugin(Plugins.ViewportAxisController3D())
 ```
 
-`Scene3D.Plugin` installe ECS et Rendering, possède le cache de meshes et
+`Plugins.Scene3D` installe ECS et Rendering, possède le cache de meshes et
 enregistre une passe 3D avec profondeur. Un renderer alternatif peut consommer
 les mêmes composants sans ce plugin.
 
 ```silex
-application.add_plugin(Scene3D.Plugin())
+application.add_plugin(Plugins.Scene3D())
 ```
 
-Avec `GFX.Application.Scenes`, ce Plugin reste global afin que les catalogues,
+Avec `Plugins.SceneManager`, ce Plugin reste global afin que les catalogues,
 pipelines et lots survivent aux transitions. Chaque scène qui contient des
-meshes ajoute `Scene3D.Content()` ; ses systèmes de préparation consultent alors
-le `World` local. `Scene2D.Content()` peut être ajouté à la même scène : les
-deux domaines préparent une seule frame, sans créer deux contextes applicatifs.
+meshes ajoute `Plugins.Scene3DContent()` ; ses systèmes de préparation
+consultent alors le `World` local. `Plugins.Scene2DContent()` peut être ajouté à
+la même scène : les deux domaines préparent une seule frame, sans créer deux
+contextes applicatifs. Ces Plugins sont directement découvrables dans le
+catalogue `GFX.Plugins`.
 
 ```silex
 scene
-    ..add_plugin(Scene2D.Content())
-    ..add_plugin(Scene3D.Content())
+    ..add_plugin(Plugins.Scene2DContent())
+    ..add_plugin(Plugins.Scene3DContent())
 ```
 
-`Scene3D.Content()` exige que `Scene3D.Plugin()` soit résolu sur l’Application ;
-la scène refuse son montage avant tout système si cette capacité globale
-manque.
+`Plugins.Scene3DContent()` exige que `Plugins.Scene3D()` soit résolu sur
+l’Application ; la scène refuse son montage avant tout système si cette
+capacité globale manque.
 
 ## Matériaux PBR
 
