@@ -68,7 +68,7 @@ func inspect_content(
     canvases:ECS.Query<(@LocalContent, @Scene2D.Canvas)>,
     mesh_entities:ECS.Query<(@LocalContent, @Scene3D.Mesh)>,
     renderer:@Renderer,
-    scenes:&Application.SceneManager,
+    bundles:&Application.BundleManager,
     probe:&Probe,
     controller:&Application.Controller
 ) {
@@ -91,10 +91,8 @@ func inspect_content(
     probe.observed.append(number.value)
 
     if number.value == 1 {
-        scenes.request(scenes.create()
+        bundles.replace(bundles.create()
             ..add_resource(SceneNumber(value:2))
-            ..add_plugin(Scene2D.Content())
-            ..add_plugin(Scene3D.Content())
             ..add_system(Application.Schedule.startup, create_content)
             ..add_after_system(Application.Schedule.render, inspect_content)
             ..add_system(Application.Schedule.finalize, finalize_content)
@@ -107,10 +105,8 @@ func inspect_content(
 test "isolate successive scenes that compose 2D and 3D content" {
     var application = Application()
     var probe = Probe()
-    var initial = Application.Scene(application)
+    var initial = Application.Bundle(application)
         ..add_resource(SceneNumber(value:1))
-        ..add_plugin(Scene2D.Content())
-        ..add_plugin(Scene3D.Content())
         ..add_system(Application.Schedule.startup, create_content)
         ..add_after_system(Application.Schedule.render, inspect_content)
         ..add_system(Application.Schedule.finalize, finalize_content)
@@ -125,7 +121,7 @@ test "isolate successive scenes that compose 2D and 3D content" {
         ))
         ..add_plugin(Scene2D.Plugin())
         ..add_plugin(Scene3D.Plugin())
-        ..add_plugin(Application.SceneManager(initial))
+        ..add_plugin(Application.BundleManager(initial))
 
     assert(application.run() == 0)
     assert(probe.starts == 2)

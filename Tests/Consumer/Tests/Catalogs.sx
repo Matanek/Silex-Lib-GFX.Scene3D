@@ -15,7 +15,6 @@ test "consume Scene3D directly and through the GFX catalogs" {
     let transform = Components.Transform3D()
     let material = Components.Material3D(metallic:0.5)
     let scene = Plugins.Scene3D()
-    let content = Plugins.Scene3DContent()
     let grid = Plugins.Grid3D()
     let viewport = Plugins.ViewportCamera3D(Plugins.ViewportCamera3D.Settings(
         distance:5.0
@@ -29,7 +28,6 @@ test "consume Scene3D directly and through the GFX catalogs" {
     assert(direct.position == transform.position)
     assert(material.metallic == 0.5)
     assert(scene.id() == "GFX.Scene3D.Plugin")
-    assert(content.id() == "GFX.Scene3D.Content")
     assert(grid.id() == "GFX.Scene3D.Grid")
     assert(viewport.id() == "GFX.Scene3D.ViewportCamera")
     assert(viewport_axis.id() == "GFX.Scene3D.ViewportAxis")

@@ -16,7 +16,6 @@ public use GFX.Scene3D.Model.instantiate
 public use GFX.Scene3D.Model.ModelInstance
 public use GFX.Scene3D.PointLight.PointLight
 public use GFX.Scene3D.PointLightGizmo.PointLightGizmo
-public use GFX.Scene3D.Plugin.Content
 public use GFX.Scene3D.Plugin.Plugin
 public use GFX.Scene3D.Rotator.Rotator
 public use GFX.Scene3D.Sampling.Sampling
@@ -71,7 +70,6 @@ contribute GFX.Plugins {
     public use GFX.Scene3D.Grid as Grid3D
     public use GFX.Scene3D.Catalogs.FirstPersonCamera3D
     public use GFX.Scene3D.Plugin as Scene3D
-    public use GFX.Scene3D.Plugin.Content as Scene3DContent
     public use GFX.Scene3D.ViewportAxis as ViewportAxis3D
     public use GFX.Scene3D.ViewportAxisController as ViewportAxisController3D
     public use GFX.Scene3D.ViewportCamera as ViewportCamera3D

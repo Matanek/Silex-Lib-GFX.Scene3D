@@ -7,7 +7,7 @@ use GFX.Input.Plugin as InputPlugin
 use GFX.Input.State as InputState
 use GFX.Scene3D.Camera
 use GFX.Scene3D.FirstPersonCamera as FirstPerson
-use GFX.Scene3D.Plugin as ScenePlugin
+use GFX.Scene3D.Plugin as Scene3DPlugin
 use GFX.Scene3D.Transform
 use GFX.Window
 use STD.Math
@@ -415,7 +415,7 @@ public struct ViewportCamera:PluginProtocol {
     func build(application:&Application) {
         if self.settings.is_first_person() {
             application.add_plugin(InputPlugin())
-            application.add_plugin(ScenePlugin())
+            application.add_plugin(Scene3DPlugin())
             application.add_resource(Controller(self.settings))
             application.add_system(Schedule.startup, create_camera)
             application.add_after_system(Schedule.startup, start_first_person_mouse_capture)
@@ -424,7 +424,7 @@ public struct ViewportCamera:PluginProtocol {
             return
         }
         application.add_plugin(InputPlugin())
-        application.add_plugin(ScenePlugin())
+        application.add_plugin(Scene3DPlugin())
         application.add_resource(Controller(self.settings))
         application.add_system(Schedule.startup, create_camera)
         application.add_system(Schedule.update, update_camera)

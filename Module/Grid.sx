@@ -1,7 +1,7 @@
 use GFX.Color
 use GFX.Application
 use GFX.Application.Plugin as PluginProtocol
-use GFX.Scene3D.Plugin as ScenePlugin
+use GFX.Scene3D.Plugin as Scene3DPlugin
 use GFX.Scene3D.Renderer
 
 public struct Grid:PluginProtocol {
@@ -41,7 +41,7 @@ public struct Grid:PluginProtocol {
     func id() str { return "GFX.Scene3D.Grid" }
 
     func build(application:&Application) {
-        application.add_plugin(ScenePlugin())
+        application.add_plugin(Scene3DPlugin())
         var resources = application.resources()
         var renderer = resources.get_mut<Renderer>()
         renderer.set_grid(self)

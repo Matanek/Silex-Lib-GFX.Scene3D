@@ -6,7 +6,7 @@ use GFX.Color
 use GFX.ECS
 use GFX.Scene2D
 use GFX.Scene3D.Camera
-use GFX.Scene3D.Plugin as ScenePlugin
+use GFX.Scene3D.Plugin as Scene3DPlugin
 use GFX.Scene3D.Transform as Transform3D
 use GFX.Scene3D.ViewportCamera.View
 use STD.Math
@@ -128,7 +128,7 @@ public struct ViewportAxis:PluginProtocol {
     func id() str { return "GFX.Scene3D.ViewportAxis" }
 
     func build(application:&Application) {
-        application.add_plugin(ScenePlugin())
+        application.add_plugin(Scene3DPlugin())
         application.add_plugin(Scene2D.Plugin())
         application.add_resource(ViewportAxisState(self.settings))
         application.add_after_system(Schedule.startup, create_viewport_axis)

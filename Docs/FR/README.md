@@ -40,23 +40,21 @@ les mêmes composants sans ce plugin.
 application.add_plugin(Plugins.Scene3D())
 ```
 
-Avec `Plugins.SceneManager`, ce Plugin reste global afin que les catalogues,
-pipelines et lots survivent aux transitions. Chaque scène qui contient des
-meshes ajoute `Plugins.Scene3DContent()` ; ses systèmes de préparation
-consultent alors le `World` local. `Plugins.Scene2DContent()` peut être ajouté à
-la même scène : les deux domaines préparent une seule frame, sans créer deux
-contextes applicatifs. Ces Plugins sont directement découvrables dans le
-catalogue `GFX.Plugins`.
+Avec `Plugins.BundleManager`, ce Plugin peut rester global afin que les
+catalogues, pipelines et lots survivent aux transitions. Il étend
+automatiquement les Bundles avec le même `Plugins.Scene3D` ; les systèmes de
+préparation consultent alors leur `World` local. `Plugins.Scene2D` suit la même
+règle et les deux domaines peuvent préparer le contenu d’un même Bundle.
 
 ```silex
-scene
-    ..add_plugin(Plugins.Scene2DContent())
-    ..add_plugin(Plugins.Scene3DContent())
+application
+    ..add_plugin(Plugins.Scene2D())
+    ..add_plugin(Plugins.Scene3D())
+    ..add_plugin(Plugins.BundleManager(bundle))
 ```
 
-`Plugins.Scene3DContent()` exige que `Plugins.Scene3D()` soit résolu sur
-l’Application ; la scène refuse son montage avant tout système si cette
-capacité globale manque.
+Un Bundle autonome peut installer `Plugins.Scene3D()` lui-même afin de posséder
+sa fenêtre et sa pile de rendu.
 
 ## Matériaux PBR
 
