@@ -80,7 +80,7 @@ class CachedInstances {
     }
 }
 
-class Renderer {
+package class Renderer {
     private var pipeline:GPU.GraphicsPipeline? = null
     private var double_sided_pipeline:GPU.GraphicsPipeline? = null
     private var transparent_pipeline:GPU.GraphicsPipeline? = null
@@ -96,6 +96,7 @@ class Renderer {
     private var draws:Draw[]
     private var batches:Batch[]
     private var active_batches:int
+    private var batch_allocations:int
     private var lighting:Lighting.Frame
     private var shadows:Shadows.Frame
     private var gizmos:Gizmos.Frame
@@ -131,6 +132,7 @@ class Renderer {
         self.draws = []
         self.batches = []
         self.active_batches = 0
+        self.batch_allocations = 0
         self.lighting = Lighting.Frame()
         self.shadows = Shadows.Frame()
         self.gizmos = Gizmos.Frame()
@@ -482,9 +484,18 @@ class Renderer {
             batch.reset(draw, draw_index)
         } else {
             self.batches.append(Batch(draw, draw_index))
+            self.batch_allocations++
         }
         self.active_batches++
         return index
+    }
+
+    package func active_batch_count() int {
+        return self.active_batches
+    }
+
+    package func batch_allocation_count() int {
+        return self.batch_allocations
     }
 
     private func upload_batches(device:@GPU.Device) {

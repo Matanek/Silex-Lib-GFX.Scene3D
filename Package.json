@@ -9,6 +9,7 @@
   "requires": { "silex": ">=0.43.0" },
   "dependencies": {
     "GFX": "^0.37.0",
+    "GFX.Application": "^0.1.0",
     "GFX.Assets": "^0.1.0",
     "GFX.Canvas": "^0.1.0",
     "GFX.ECS": "^0.1.0",

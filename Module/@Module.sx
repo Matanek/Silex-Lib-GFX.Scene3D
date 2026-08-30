@@ -16,6 +16,7 @@ public use GFX.Scene3D.Model.instantiate
 public use GFX.Scene3D.Model.ModelInstance
 public use GFX.Scene3D.PointLight.PointLight
 public use GFX.Scene3D.PointLightGizmo.PointLightGizmo
+public use GFX.Scene3D.Plugin.Content
 public use GFX.Scene3D.Plugin.Plugin
 public use GFX.Scene3D.Rotator.Rotator
 public use GFX.Scene3D.Sampling.Sampling

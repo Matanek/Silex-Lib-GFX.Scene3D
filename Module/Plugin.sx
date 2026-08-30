@@ -1,5 +1,6 @@
 use GFX.Application
 use GFX.Application.Plugin as PluginProtocol
+use GFX.Application.ScenePlugin as ScenePluginProtocol
 use GFX.Application.Schedule
 use GFX.Assets.Image
 use GFX.ECS
@@ -17,27 +18,45 @@ use GFX.Window
 public struct Plugin:PluginProtocol {
     func id() str { return "GFX.Scene3D.Plugin" }
 
-    func build(application:&Application) {
-        application.add_plugin(ECS.Plugin())
-        application.add_plugin(Rendering.Plugin())
-        if !application.resources().has<Meshes>() { application.add_resource(Meshes()) }
-        if !application.resources().has<Image.Store>() { application.add_resource(Image.Store()) }
-        if !application.resources().has<Skybox>() {
-            application.add_resource(Skybox.none())
+    func build(host:&Application) {
+        host.add_plugin(ECS.Plugin())
+        host.add_plugin(Rendering.Plugin())
+        if !host.resources().has<Meshes>() { host.add_resource(Meshes()) }
+        if !host.resources().has<Image.Store>() { host.add_resource(Image.Store()) }
+        if !host.resources().has<Skybox>() {
+            host.add_resource(Skybox.none())
         }
-        if !application.resources().has<ToneMapping>() { application.add_resource(ToneMapping.aces()) }
-        application.add_resource(Renderer())
+        if !host.resources().has<ToneMapping>() { host.add_resource(ToneMapping.aces()) }
+        host.add_resource(Renderer())
         {
-            var resources = application.resources()
+            var resources = host.resources()
             var rendering = resources.get_mut<Rendering.Renderer>()
             rendering.add_pass("GFX.Scene3D", render_scene, depth:true)
         }
-        application.add_system(Schedule.startup, start_scene)
-        application.add_system(Schedule.render, update_viewport)
-        application.add_system(Schedule.render, update_skybox)
-        application.add_system(Schedule.render, update_tone_mapping)
-        application.add_system(Schedule.render, prepare_scene)
-        application.add_system(Schedule.shutdown, stop_scene)
+        host.add_system(Schedule.startup, start_scene)
+        if !host.has_plugin("GFX.Application.Scenes") {
+            self.add_content_systems(host)
+        }
+        host.add_system(Schedule.shutdown, stop_scene)
+    }
+
+    private func add_content_systems(host:&Application) {
+        host.add_system(Schedule.render, update_viewport)
+        host.add_system(Schedule.render, update_skybox)
+        host.add_system(Schedule.render, update_tone_mapping)
+        host.add_system(Schedule.render, prepare_scene)
+    }
+}
+
+public struct Content:ScenePluginProtocol {
+    func id() str { return "GFX.Scene3D.Content" }
+
+    func build(host:&Application.Scene) {
+        host.require_application_plugin("GFX.Scene3D.Plugin")
+        host.add_system(Schedule.render, update_viewport)
+        host.add_system(Schedule.render, update_skybox)
+        host.add_system(Schedule.render, update_tone_mapping)
+        host.add_system(Schedule.render, prepare_scene)
     }
 }
 

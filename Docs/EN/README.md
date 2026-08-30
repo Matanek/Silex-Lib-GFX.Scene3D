@@ -66,6 +66,22 @@ light values from an alternative renderer.
 application.add_plugin(Scene3D.Plugin())
 ```
 
+With `GFX.Application.Scenes`, this Plugin remains global so catalogs,
+pipelines, and batches survive transitions. Each scene containing meshes adds
+`Scene3D.Content()`; its preparation systems then read the local `World`.
+`Scene2D.Content()` may be added to the same scene: both domains prepare one
+frame without creating competing application contexts.
+
+```silex
+scene
+    ..add_plugin(Scene2D.Content())
+    ..add_plugin(Scene3D.Content())
+```
+
+`Scene3D.Content()` requires `Scene3D.Plugin()` to be resolved on the
+Application; the scene refuses to mount before running any system when this
+global capability is missing.
+
 ## PBR materials
 
 `Material` describes scalar surface properties. Optional image maps and raster

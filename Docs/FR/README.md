@@ -45,6 +45,22 @@ les mêmes composants sans ce plugin.
 application.add_plugin(Scene3D.Plugin())
 ```
 
+Avec `GFX.Application.Scenes`, ce Plugin reste global afin que les catalogues,
+pipelines et lots survivent aux transitions. Chaque scène qui contient des
+meshes ajoute `Scene3D.Content()` ; ses systèmes de préparation consultent alors
+le `World` local. `Scene2D.Content()` peut être ajouté à la même scène : les
+deux domaines préparent une seule frame, sans créer deux contextes applicatifs.
+
+```silex
+scene
+    ..add_plugin(Scene2D.Content())
+    ..add_plugin(Scene3D.Content())
+```
+
+`Scene3D.Content()` exige que `Scene3D.Plugin()` soit résolu sur l’Application ;
+la scène refuse son montage avant tout système si cette capacité globale
+manque.
+
 ## Matériaux PBR
 
 `Material` décrit les propriétés scalaires. `MaterialSettings` porte textures
