@@ -133,3 +133,49 @@ test "isolate successive scenes that compose 2D and 3D content" {
     assert(probe.batch_allocations[0] == 1)
     assert(probe.batch_allocations[1] == 1)
 }
+
+func inspect_direct_content(
+    canvases:ECS.Query<(@LocalContent, @Scene2D.Canvas)>,
+    mesh_entities:ECS.Query<(@LocalContent, @Scene3D.Mesh)>,
+    renderer:@Renderer,
+    controller:&Application.Controller
+) {
+    var canvas_count = 0
+    for (marker, canvas) in canvases {
+        assert(marker.scene == 1)
+        assert(canvas.width() == 8)
+        canvas_count++
+    }
+    var mesh_count = 0
+    for (marker, mesh) in mesh_entities {
+        assert(marker.scene == 1)
+        assert(mesh.asset.is_valid())
+        mesh_count++
+    }
+    assert(canvas_count == 1)
+    assert(mesh_count == 1)
+    assert(renderer.active_batch_count() == 1)
+    controller.stop()
+}
+
+test "install Scene2D and Scene3D directly inside an Application Bundle" {
+    var application = Application()
+    var probe = Probe()
+    var bundle = Application.Bundle(application)
+        ..add_resource(probe)
+        ..add_resource(SceneNumber(value:1))
+        ..add_plugin(WindowPlugin(WindowPlugin.Settings()
+            ..title = "Bundle-owned Scene3D"
+            ..width = 32
+            ..height = 32
+            ..hidden = true
+        ))
+        ..add_plugin(Scene2D.Plugin())
+        ..add_plugin(Scene3D.Plugin())
+        ..add_system(Application.Schedule.startup, create_content)
+        ..add_after_system(Application.Schedule.render, inspect_direct_content)
+
+    application.add_plugin(Application.BundleManager(bundle))
+    assert(application.run() == 0)
+    assert(bundle.is_finalized())
+}
