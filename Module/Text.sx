@@ -425,8 +425,10 @@ func vector(point:Font.Position) Math.Vec2 {
 }
 
 func coordinate(value:float64) float {
-    let fixed = Math.round(value * 65536.0) as int
-    return fixed as float / 65536.0
+    // Keep long runs exactly convertible to float32 while staying over ten
+    // times finer than the smallest supported curve tolerance.
+    let fixed = Math.round(value * 4096.0) as int
+    return fixed as float / 4096.0
 }
 
 func append_slab(points:&Math.Vec2[], indices:&uint32[], edges:@Edge[], lower:float, upper:float) {

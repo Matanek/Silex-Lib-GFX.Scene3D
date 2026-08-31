@@ -5,8 +5,9 @@ réellement sur ce domaine : matériaux, lumières, ombres, sélection et gizmo
 transform. Ces concepts n’appartiennent ni à `GFX.Rendering`, ni à un domaine
 éditeur séparé.
 
-L’[exemple exécutable](../../Examples/VectorText.sx) fournit les quatre petites
-fonctions `*_or_panic` qui rendent la politique d’erreur de l’application
+Le démonstrateur exécutable
+`Silex-Examples/Sources/VectorFontShowcase/Main.sx` fournit les quatre petites
+fonctions `required_*` qui rendent la politique d’erreur de l’application
 explicite ; le cœur de son usage est :
 
 ```silex
@@ -125,9 +126,9 @@ use GFX.Font
 use GFX.Scene3D
 use STD.Math
 
-var face = face_or_panic(Font.Face.default())
-var instance = instance_or_panic(Font.Instance.create(face, size:1.0))
-var run = run_or_panic(instance.shape("Silex"))
+var face = required_face(Font.Face.default())
+var instance = required_instance(Font.Instance.create(face, size:1.0))
+var run = required_run(instance.shape("Silex"))
 let source = Scene3D.Text(
     run,
     plane:Scene3D.TextPlane(
@@ -136,7 +137,7 @@ let source = Scene3D.Text(
         y_axis:Math.Vec3(0.0, 0.01, 0.0)
     )
 )
-let handle = text_or_panic(meshes.add_text(source))
+let handle = required_text(meshes.add_text(source))
 world.spawn(ECS.EntityRecipe()
     ..with(Scene3D.Transform())
     ..with(Scene3D.Mesh(handle, casts_shadows:true))

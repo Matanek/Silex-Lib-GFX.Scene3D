@@ -14,6 +14,6 @@ silex install GFX.Scene3D
 
 Le package nécessite Silex 0.43.0 ou une version ultérieure.
 
-L’exemple [`Examples/VectorText.sx`](Examples/VectorText.sx) montre un
-`GlyphRun` converti en géométrie planaire éclairée, avec matériau PBR et ombre
-projetée sur un receiver distinct.
+Le démonstrateur public `Silex-Examples/Sources/VectorFontShowcase/Main.sx`
+montre un `GlyphRun` converti en géométrie planaire éclairée, avec matériau PBR
+et ombre projetée sur un receiver distinct.

@@ -5,9 +5,9 @@ act on this domain: materials, lights, shadows, selection, and transform
 gizmos. None of these concepts belongs to `GFX.Rendering` or a supposed
 `Editor3D` domain.
 
-The [executable example](../../Examples/VectorText.sx) provides the four small
-`*_or_panic` helpers that make the application's error policy explicit; its
-core usage is:
+The executable `Silex-Examples/Sources/VectorFontShowcase/Main.sx` provides the
+four small `required_*` helpers that make the application's error policy
+explicit; its core usage is:
 
 ```silex
 use GFX.Scene3D.Material as Material3D
@@ -151,9 +151,9 @@ use GFX.Font
 use GFX.Scene3D
 use STD.Math
 
-var face = face_or_panic(Font.Face.default())
-var instance = instance_or_panic(Font.Instance.create(face, size:1.0))
-var run = run_or_panic(instance.shape("Silex"))
+var face = required_face(Font.Face.default())
+var instance = required_instance(Font.Instance.create(face, size:1.0))
+var run = required_run(instance.shape("Silex"))
 let source = Scene3D.Text(
     run,
     plane:Scene3D.TextPlane(
@@ -162,7 +162,7 @@ let source = Scene3D.Text(
         y_axis:Math.Vec3(0.0, 0.01, 0.0)
     )
 )
-let handle = text_or_panic(meshes.add_text(source))
+let handle = required_text(meshes.add_text(source))
 world.spawn(ECS.EntityRecipe()
     ..with(Scene3D.Transform())
     ..with(Scene3D.Mesh(handle, casts_shadows:true))
