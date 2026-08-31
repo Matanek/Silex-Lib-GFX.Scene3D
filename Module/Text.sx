@@ -1,0 +1,515 @@
+use GFX.Canvas.TextLayer
+use GFX.Font
+use GFX.Scene3D.Geometry.Mesh as GeometryMesh
+use GFX.Scene3D.Geometry.Vertex
+use STD.Math
+
+public struct TextPlane {
+    let origin:Math.Vec3
+    let x_axis:Math.Vec3
+    let y_axis:Math.Vec3
+
+    init(origin:Math.Vec3, x_axis:Math.Vec3, y_axis:Math.Vec3) {
+        self.origin = origin
+        self.x_axis = x_axis
+        self.y_axis = y_axis
+    }
+}
+
+public struct Text {
+    module var run:Font.GlyphRun
+    module let plane:TextPlane
+    module let tolerance:float
+
+    init(run:Font.GlyphRun, plane:TextPlane, tolerance:float = 0.0075) {
+        self.run = run
+        self.plane = plane
+        self.tolerance = tolerance
+    }
+}
+
+public struct TextBounds {
+    let minimum:Math.Vec3
+    let maximum:Math.Vec3
+}
+
+public struct TextError {
+    let detail:str
+    let face_identity:str
+    let glyph_id:uint32?
+    let cluster:Font.Cluster?
+}
+
+public struct TextCacheStats {
+    let glyph_meshes:int
+    let cache_hits:int
+    let tessellations:int
+    let text_builds:int
+    let placed_glyphs:int
+}
+
+package struct TextBuild {
+    let mesh:GeometryMesh
+    let bounds:TextBounds
+}
+
+struct FlatMesh {
+    let points:Math.Vec2[]
+    let indices:uint32[]
+}
+
+class GlyphMeshEntry {
+    let key:str
+    let mesh:FlatMesh
+
+    init(key:str, mesh:FlatMesh) {
+        self.key = key
+        self.mesh = mesh
+    }
+}
+
+package class TextCache {
+    // Scene3D owns these normalized CPU meshes. The ring stays bounded even
+    // when applications display unbounded terminal or document content.
+    private var glyphs:GlyphMeshEntry[] = []
+    private var cursor:int = 0
+    private var cache_hits:int = 0
+    private var tessellations:int = 0
+    private var text_builds:int = 0
+    private var placed_glyphs:int = 0
+
+    func stats() TextCacheStats {
+        return TextCacheStats(
+            glyph_meshes:self.glyphs.count(),
+            cache_hits:self.cache_hits,
+            tessellations:self.tessellations,
+            text_builds:self.text_builds,
+            placed_glyphs:self.placed_glyphs
+        )
+    }
+
+    func build(text:Text) Result<TextBuild, TextError> {
+        match validate_plane(text.plane, text.tolerance) {
+            failure(error) => { return Result<TextBuild, TextError>.failure(error) }
+            success => {}
+        }
+        var run = text.run
+        let identity = instance_key(run.instance())
+        match run.outlines() {
+            failure(error) => {
+                return Result<TextBuild, TextError>.failure(TextError(
+                    detail:error.detail,
+                    face_identity:run.instance().face().identity(),
+                    glyph_id:null,
+                    cluster:null
+                ))
+            }
+            success(placements) => {
+                return self.build_placements(
+                    placements,
+                    [],
+                    identity,
+                    run.instance().face().identity(),
+                    text.plane,
+                    text.tolerance,
+                    false
+                )
+            }
+        }
+    }
+
+    func build_canvas(
+        layer:TextLayer,
+        plane:TextPlane,
+        tolerance:float
+    ) Result<TextBuild, TextError> {
+        match validate_plane(plane, tolerance) {
+            failure(error) => { return Result<TextBuild, TextError>.failure(error) }
+            success => {}
+        }
+        var runs = layer.glyph_runs()
+        match layer.vector_outlines() {
+            failure(error) => {
+                return Result<TextBuild, TextError>.failure(TextError(
+                    detail:error.detail,
+                    face_identity:error.face_identity,
+                    glyph_id:null,
+                    cluster:error.cluster
+                ))
+            }
+            success(canvas_placements) => {
+                var placements:Font.PlacedOutline[] = []
+                var baselines:Math.Vec2[] = []
+                for placement in canvas_placements {
+                    placements.append(placement.glyph)
+                    baselines.append(placement.baseline)
+                }
+                var identity = "canvas-empty"
+                var face_identity = "canvas-empty"
+                if !runs.is_empty() {
+                    identity = instance_key(runs[0].instance())
+                    face_identity = runs[0].instance().face().identity()
+                }
+                return self.build_placements(
+                    placements,
+                    baselines,
+                    identity,
+                    face_identity,
+                    plane,
+                    tolerance,
+                    true
+                )
+            }
+        }
+    }
+
+    private func build_placements(
+        placements:Font.PlacedOutline[],
+        baselines:Math.Vec2[],
+        identity:str,
+        face_identity:str,
+        plane:TextPlane,
+        tolerance:float,
+        canvas_y_down:bool
+    ) Result<TextBuild, TextError> {
+        let normal = plane.x_axis.cross(plane.y_axis).normalized()
+        var vertices:Vertex[] = []
+        var indices:uint32[] = []
+        var minimum:Math.Vec3? = null
+        var maximum:Math.Vec3? = null
+        var placement_index = 0
+        while placement_index < placements.count() {
+            let placement = placements[placement_index]
+            if let outline = placement.outline {
+                if !outline.is_empty() {
+                    let key = identity + "|glyph=$(placement.glyph_id)|tolerance=$(tolerance)"
+                    let flat = self.glyph_mesh(key, outline, tolerance)
+                    let base = vertices.count() as uint32
+                    var baseline = Math.Vec2()
+                    if placement_index < baselines.count() { baseline = baselines[placement_index] }
+                    for point in flat.points {
+                        let transform = placement.transform
+                        var logical_x = coordinate(transform.xx) * point.x +
+                            coordinate(transform.xy) * point.y + coordinate(transform.dx)
+                        var logical_y = coordinate(transform.yx) * point.x +
+                            coordinate(transform.yy) * point.y + coordinate(transform.dy)
+                        if canvas_y_down {
+                            logical_x += baseline.x
+                            logical_y = -(baseline.y - logical_y)
+                        }
+                        let position = plane.origin
+                            .add(plane.x_axis.multiply(logical_x))
+                            .add(plane.y_axis.multiply(logical_y))
+                        vertices.append(Vertex(position:position, normal:normal))
+                        if let value = minimum { minimum = value.minimum(position) }
+                        else { minimum = position }
+                        if let value = maximum { maximum = value.maximum(position) }
+                        else { maximum = position }
+                    }
+                    for index in flat.indices { indices.append(base + index) }
+                    self.placed_glyphs++
+                }
+            } else {
+                return Result<TextBuild, TextError>.failure(TextError(
+                    detail:"font glyph $(placement.glyph_id) has no vector outline",
+                    face_identity:face_identity,
+                    glyph_id:placement.glyph_id,
+                    cluster:placement.cluster
+                ))
+            }
+            placement_index++
+        }
+        if vertices.is_empty() || indices.is_empty() {
+            return Result<TextBuild, TextError>.failure(TextError(
+                detail:"text has no drawable vector outline",
+                face_identity:face_identity,
+                glyph_id:null,
+                cluster:null
+            ))
+        }
+        self.text_builds++
+        var first = Math.Vec3()
+        var last = Math.Vec3()
+        if let value = minimum { first = value }
+        if let value = maximum { last = value }
+        return Result<TextBuild, TextError>.success(TextBuild(
+            mesh:GeometryMesh(vertices, indices),
+            bounds:TextBounds(minimum:first, maximum:last)
+        ))
+    }
+
+    private func glyph_mesh(key:str, outline:Font.GlyphOutline, tolerance:float) FlatMesh {
+        for entry in self.glyphs {
+            if entry.key == key {
+                self.cache_hits++
+                return entry.mesh
+            }
+        }
+        let mesh = tessellate(outline, tolerance)
+        var entry = GlyphMeshEntry(key, mesh)
+        if self.glyphs.count() < 1024 {
+            self.glyphs.append(entry)
+        } else {
+            self.glyphs[self.cursor] = entry
+            self.cursor = (self.cursor + 1) % 1024
+        }
+        self.tessellations++
+        return mesh
+    }
+}
+
+func validate_plane(plane:TextPlane, tolerance:float) Result<void, TextError> {
+    if tolerance <= 0.0 || !Math.is_finite(tolerance) {
+        return Result<void, TextError>.failure(TextError(
+            detail:"Scene3D text tessellation tolerance must be positive and finite",
+            face_identity:"",
+            glyph_id:null,
+            cluster:null
+        ))
+    }
+    let x_length = plane.x_axis.length_squared()
+    let y_length = plane.y_axis.length_squared()
+    let cross = plane.x_axis.cross(plane.y_axis)
+    if !finite_vector(plane.origin) || !finite_vector(plane.x_axis) ||
+        !finite_vector(plane.y_axis) || x_length <= 0.0 || y_length <= 0.0 ||
+        cross.length_squared() <= x_length * y_length * 0.000000000001
+    {
+        return Result<void, TextError>.failure(TextError(
+            detail:"Scene3D text plane axes must be non-zero and non-collinear",
+            face_identity:"",
+            glyph_id:null,
+            cluster:null
+        ))
+    }
+    return Result<void, TextError>.success()
+}
+
+func finite_vector(value:Math.Vec3) bool {
+    return Math.is_finite(value.x) && Math.is_finite(value.y) && Math.is_finite(value.z)
+}
+
+func instance_key(instance:Font.Instance) str {
+    var key = instance.face().identity()
+    for variation in instance.variations() {
+        key = key + "|$(variation.tag)=$(variation.value)"
+    }
+    let synthesis = instance.synthesis()
+    key = key + "|embolden=$(synthesis.embolden)|oblique=$(synthesis.oblique)"
+    return key
+}
+
+struct Edge { let first:Math.Vec2; let second:Math.Vec2; let winding:int }
+struct Crossing {
+    let lower_x:float
+    let upper_x:float
+    let middle_x:float
+    let winding:int
+}
+
+// Horizontal slabs evaluate non-zero winding across all contours together;
+// counters in O, B, accents, and composite glyphs therefore remain holes.
+func tessellate(outline:Font.GlyphOutline, tolerance:float) FlatMesh {
+    var edges:Edge[] = []
+    var levels:float[] = []
+    for contour in outline.contours {
+        let points = flatten(contour, tolerance)
+        if points.count() < 3 { continue }
+        var index = 0
+        while index < points.count() {
+            let next = (index + 1) % points.count()
+            let first = points[index]
+            let second = points[next]
+            if Math.abs(second.y - first.y) > 0.000001 {
+                var winding = 1
+                if second.y < first.y { winding = -1 }
+                edges.append(Edge(first:first, second:second, winding:winding))
+                levels.append(first.y)
+                levels.append(second.y)
+            }
+            index++
+        }
+    }
+    sort_values(levels)
+    let unique = unique_values(levels)
+    var points:Math.Vec2[] = []
+    var indices:uint32[] = []
+    var level = 0
+    while level + 1 < unique.count() {
+        let lower = unique[level]
+        let upper = unique[level + 1]
+        if upper - lower > 0.000001 {
+            append_slab(points, indices, edges, lower, upper)
+        }
+        level++
+    }
+    return FlatMesh(points:points, indices:indices)
+}
+
+func flatten(contour:Font.OutlineContour, tolerance:float) Math.Vec2[] {
+    var result:Math.Vec2[] = []
+    var current = Math.Vec2()
+    var started = false
+    for step in contour.steps {
+        match step {
+            move_to(point) => {
+                current = vector(point)
+                result.append(current)
+                started = true
+            }
+            line_to(point) => {
+                current = vector(point)
+                append_distinct(result, current)
+            }
+            quadratic_to(curve) => {
+                if !started { continue }
+                let control = vector(curve.control)
+                let endpoint = vector(curve.endpoint)
+                let estimate = current.distance(control) + control.distance(endpoint)
+                let segments = segment_count(estimate, tolerance)
+                var index = 1
+                while index <= segments {
+                    let amount = index as float / segments as float
+                    let inverse = 1.0 - amount
+                    append_distinct(result, Math.Vec2(
+                        inverse * inverse * current.x + 2.0 * inverse * amount * control.x + amount * amount * endpoint.x,
+                        inverse * inverse * current.y + 2.0 * inverse * amount * control.y + amount * amount * endpoint.y
+                    ))
+                    index++
+                }
+                current = endpoint
+            }
+            cubic_to(curve) => {
+                if !started { continue }
+                let first = vector(curve.control_1)
+                let second = vector(curve.control_2)
+                let endpoint = vector(curve.endpoint)
+                let estimate = current.distance(first) + first.distance(second) + second.distance(endpoint)
+                let segments = segment_count(estimate, tolerance)
+                var index = 1
+                while index <= segments {
+                    let amount = index as float / segments as float
+                    let inverse = 1.0 - amount
+                    append_distinct(result, Math.Vec2(
+                        inverse * inverse * inverse * current.x + 3.0 * inverse * inverse * amount * first.x + 3.0 * inverse * amount * amount * second.x + amount * amount * amount * endpoint.x,
+                        inverse * inverse * inverse * current.y + 3.0 * inverse * inverse * amount * first.y + 3.0 * inverse * amount * amount * second.y + amount * amount * amount * endpoint.y
+                    ))
+                    index++
+                }
+                current = endpoint
+            }
+            close => {}
+        }
+    }
+    if result.count() > 1 && result[0].distance(result[-1]) <= 0.000001 {
+        var open:Math.Vec2[] = []
+        var index = 0
+        while index + 1 < result.count() { open.append(result[index]); index++ }
+        return open
+    }
+    return result
+}
+
+func segment_count(length:float, tolerance:float) int {
+    var count = Math.ceil(Math.sqrt(length / tolerance)) as int
+    if count < 2 { count = 2 }
+    if count > 64 { count = 64 }
+    return count
+}
+
+func append_distinct(points:&Math.Vec2[], point:Math.Vec2) {
+    if points.is_empty() || points[-1].distance(point) > 0.000001 { points.append(point) }
+}
+
+func vector(point:Font.Position) Math.Vec2 {
+    return Math.Vec2(coordinate(point.x), coordinate(point.y))
+}
+
+func coordinate(value:float64) float {
+    let fixed = Math.round(value * 65536.0) as int
+    return fixed as float / 65536.0
+}
+
+func append_slab(points:&Math.Vec2[], indices:&uint32[], edges:@Edge[], lower:float, upper:float) {
+    let middle = (lower + upper) * 0.5
+    var crossings:Crossing[] = []
+    for edge in edges {
+        let minimum = Math.min(edge.first.y, edge.second.y)
+        let maximum = Math.max(edge.first.y, edge.second.y)
+        if middle <= minimum || middle >= maximum { continue }
+        crossings.append(Crossing(
+            lower_x:edge_x(edge, lower),
+            upper_x:edge_x(edge, upper),
+            middle_x:edge_x(edge, middle),
+            winding:edge.winding
+        ))
+    }
+    sort_crossings(crossings)
+    var winding = 0
+    var opening:Crossing? = null
+    for crossing in crossings {
+        let previous = winding
+        winding += crossing.winding
+        if previous == 0 && winding != 0 { opening = crossing }
+        elif previous != 0 && winding == 0 {
+            if let first = opening { append_quad(points, indices, first, crossing, lower, upper) }
+            opening = null
+        }
+    }
+}
+
+func edge_x(edge:@Edge, y:float) float {
+    let amount = (y - edge.first.y) / (edge.second.y - edge.first.y)
+    return edge.first.x + (edge.second.x - edge.first.x) * amount
+}
+
+func append_quad(points:&Math.Vec2[], indices:&uint32[], left:Crossing, right:Crossing, lower:float, upper:float) {
+    if right.middle_x - left.middle_x <= 0.000001 { return }
+    append_triangle(points, indices, Math.Vec2(left.lower_x, lower), Math.Vec2(right.lower_x, lower), Math.Vec2(right.upper_x, upper))
+    append_triangle(points, indices, Math.Vec2(left.lower_x, lower), Math.Vec2(right.upper_x, upper), Math.Vec2(left.upper_x, upper))
+}
+
+func append_triangle(points:&Math.Vec2[], indices:&uint32[], first:Math.Vec2, second:Math.Vec2, third:Math.Vec2) {
+    let base = points.count() as uint32
+    points.append(first)
+    points.append(second)
+    points.append(third)
+    indices.append(base)
+    indices.append(base + 1)
+    indices.append(base + 2)
+}
+
+func sort_values(values:&float[]) {
+    var index = 1
+    while index < values.count() {
+        let selected = values[index]
+        var cursor = index
+        while cursor > 0 && selected < values[cursor - 1] {
+            values[cursor] = values[cursor - 1]
+            cursor--
+        }
+        values[cursor] = selected
+        index++
+    }
+}
+
+func unique_values(values:@float[]) float[] {
+    var result:float[] = []
+    for value in values {
+        if result.is_empty() || Math.abs(result[-1] - value) > 0.000001 { result.append(value) }
+    }
+    return result
+}
+
+func sort_crossings(values:&Crossing[]) {
+    var index = 1
+    while index < values.count() {
+        let selected = values[index]
+        var cursor = index
+        while cursor > 0 && selected.middle_x < values[cursor - 1].middle_x {
+            values[cursor] = values[cursor - 1]
+            cursor--
+        }
+        values[cursor] = selected
+        index++
+    }
+}

@@ -5,6 +5,10 @@ réellement sur ce domaine : matériaux, lumières, ombres, sélection et gizmo
 transform. Ces concepts n’appartiennent ni à `GFX.Rendering`, ni à un domaine
 éditeur séparé.
 
+L’[exemple exécutable](../../Examples/VectorText.sx) fournit les quatre petites
+fonctions `*_or_panic` qui rendent la politique d’erreur de l’application
+explicite ; le cœur de son usage est :
+
 ```silex
 use GFX.Scene3D.Material as Material3D
 use GFX.Scene3D.Rotator as Rotator3D
@@ -107,6 +111,56 @@ print("$(instance.entities.count()) primitives")
 
 La géométrie procédurale reste indépendante et produit des
 `Scene3D.Geometry.Mesh` natifs.
+
+## Texte vectoriel planaire
+
+`Scene3D.Text` convertit un `GFX.Font.GlyphRun` façonné en triangles physiques.
+Le plan fournit une origine et deux axes 3D non nuls et non colinéaires. L’axe
+Y-up de la fonte est conservé, la normale est le produit vectoriel normalisé
+des axes, et le mesh obtenu emprunte ensuite exactement le chemin ordinaire de
+`Mesh`, `Material`, des lumières et des shadow maps.
+
+```silex
+use GFX.Font
+use GFX.Scene3D
+use STD.Math
+
+var face = face_or_panic(Font.Face.default())
+var instance = instance_or_panic(Font.Instance.create(face, size:1.0))
+var run = run_or_panic(instance.shape("Silex"))
+let source = Scene3D.Text(
+    run,
+    plane:Scene3D.TextPlane(
+        origin:Math.Vec3(0.0, 1.0, 0.0),
+        x_axis:Math.Vec3(0.01, 0.0, 0.0),
+        y_axis:Math.Vec3(0.0, 0.01, 0.0)
+    )
+)
+let handle = text_or_panic(meshes.add_text(source))
+world.spawn(ECS.EntityRecipe()
+    ..with(Scene3D.Transform())
+    ..with(Scene3D.Mesh(handle, casts_shadows:true))
+    ..with(Scene3D.Material(roughness:0.7))
+    ..with(Scene3D.MaterialSettings(double_sided:true))
+)
+```
+
+`Meshes` possède un cache borné de 1 024 tessellations, indexé par face,
+variations, synthèse, glyphe et tolérance, mais pas par taille, couleur,
+placement, caméra ou lumière. Deux textes de tailles différentes partagent
+donc les mêmes triangles normalisés. `text_cache_stats()` rend les hits,
+tessellations et placements observables pour les tests et profils.
+
+`add_canvas_text` accepte aussi un `Canvas.TextLayer` vector-compatible et
+applique explicitement son repère Y-down. Un glyphe bitmap/couleur sans contour
+échoue avant la frame avec un `TextError` indiquant la face, le glyphe et son
+cluster. `text_bounds(handle)` retourne les bornes physiques du mesh.
+
+Le texte reste une surface sans épaisseur : `double_sided` est recommandé
+quand il doit être visible des deux côtés. `casts_shadows:false` le retire de la
+passe d’ombre. Les modes `opaque` et `mask` existants fonctionnent sans texture
+alpha, puisque la silhouette et ses trous sont déjà décrits par les triangles.
+Extrusion, bevel et parois latérales ne font pas partie de cette version.
 
 ## Ombres solaires ajustées à la caméra
 

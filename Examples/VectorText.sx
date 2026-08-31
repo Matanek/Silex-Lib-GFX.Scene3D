@@ -1,0 +1,97 @@
+use GFX.Application
+use GFX.Color
+use GFX.ECS
+use GFX.Font
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+func face_or_panic(result:Result<Font.Face, Font.Error>) Font.Face {
+    match result {
+        failure(error) => { panic(error.detail) }
+        success(face) => { return face }
+    }
+}
+
+func instance_or_panic(result:Result<Font.Instance, Font.Error>) Font.Instance {
+    match result {
+        failure(error) => { panic(error.detail) }
+        success(instance) => { return instance }
+    }
+}
+
+func run_or_panic(result:Result<Font.GlyphRun, Font.Error>) Font.GlyphRun {
+    match result {
+        failure(error) => { panic(error.detail) }
+        success(run) => { return run }
+    }
+}
+
+func text_or_panic(
+    result:Result<Scene3D.MeshHandle, Scene3D.TextError>
+) Scene3D.MeshHandle {
+    match result {
+        failure(error) => { panic(error.detail) }
+        success(handle) => { return handle }
+    }
+}
+
+func create_vector_text(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    var face = face_or_panic(Font.Face.default())
+    var instance = instance_or_panic(Font.Instance.create(face, size:1.0))
+    var run = run_or_panic(instance.shape("Vector O Bé"))
+    let text = text_or_panic(meshes.add_text(Scene3D.Text(
+        run,
+        plane:Scene3D.TextPlane(
+            origin:Math.Vec3(-3.5, 0.0, 0.0),
+            x_axis:Math.Vec3.right(),
+            y_axis:Math.Vec3.up()
+        ),
+        tolerance:0.003
+    )))
+    let receiver = meshes.add(Scene3D.Geometry.Plane.make(Math.Vec2(9.0, 3.4)))
+
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 1.0, 7.0)))
+        ..with(Scene3D.Camera(near_plane:0.05, far_plane:40.0))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform())
+        ..with(Scene3D.Mesh(text, casts_shadows:true))
+        ..with(Scene3D.Material(
+            albedo:Color.amber_400(),
+            metallic:0.15,
+            roughness:0.48
+        ))
+        ..with(Scene3D.MaterialSettings(double_sided:true))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.15, -0.6)))
+        ..with(Scene3D.Mesh(receiver, casts_shadows:false))
+        ..with(Scene3D.Material(
+            albedo:Color.slate_800(),
+            roughness:0.9
+        ))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.AmbientLight(intensity:0.12))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.SunLight(
+            direction:Math.Vec3(0.25, -0.3, -1.0).normalized(),
+            intensity:4.0
+        ))
+    )
+}
+
+func main() {
+    var application = Application()
+    application.add_plugin(WindowPlugin(WindowPlugin.Settings()
+        ..title = "GFX.Scene3D — planar vector text"
+        ..width = 1100
+        ..height = 520
+    ))
+    application.add_plugin(Scene3D.Plugin())
+    application.add_system(Application.Schedule.startup, create_vector_text)
+    application.run()
+}

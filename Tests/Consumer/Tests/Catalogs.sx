@@ -2,6 +2,7 @@ use GFX.Components
 use GFX.Plugins
 use GFX.Resources
 use GFX.Scene3D
+use STD.Math
 
 func injected(
     meshes:&Resources.Meshes3D,
@@ -12,6 +13,11 @@ func injected(
 
 test "consume Scene3D directly and through the GFX catalogs" {
     let direct = Scene3D.Transform()
+    let text_plane = Scene3D.TextPlane(
+        origin:Math.Vec3(),
+        x_axis:Math.Vec3.right(),
+        y_axis:Math.Vec3.up()
+    )
     let transform = Components.Transform3D()
     let material = Components.Material3D(metallic:0.5)
     let scene = Plugins.Scene3D()
@@ -26,6 +32,7 @@ test "consume Scene3D directly and through the GFX catalogs" {
     )
 
     assert(direct.position == transform.position)
+    assert(text_plane.x_axis == Math.Vec3.right())
     assert(material.metallic == 0.5)
     assert(scene.id() == "GFX.Scene3D.Plugin")
     assert(grid.id() == "GFX.Scene3D.Grid")

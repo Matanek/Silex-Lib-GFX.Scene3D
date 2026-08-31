@@ -1,5 +1,12 @@
 use GFX.Scene3D.MeshHandle as MeshHandle
 use GFX.Scene3D.Geometry.Mesh as GeometryMesh
+use GFX.Canvas.TextLayer
+use GFX.Scene3D.Text
+use GFX.Scene3D.Text.TextBounds
+use GFX.Scene3D.Text.TextCache
+use GFX.Scene3D.Text.TextCacheStats
+use GFX.Scene3D.Text.TextError
+use GFX.Scene3D.Text.TextPlane
 
 class MeshEntry {
     var mesh:GeometryMesh
@@ -17,8 +24,12 @@ class MeshEntry {
 
 public class Meshes {
     private var entries:MeshEntry[]
+    private var text_cache:TextCache
 
-    init() { self.entries = [] }
+    init() {
+        self.entries = []
+        self.text_cache = TextCache()
+    }
 
     func add(mesh:GeometryMesh) MeshHandle {
         if mesh.is_empty() { panic("GFX.Scene3D cannot add an empty mesh") }
@@ -26,6 +37,45 @@ public class Meshes {
         entries.append(MeshEntry(mesh))
         self.entries = entries
         return MeshHandle(entries.count() - 1, 1)
+    }
+
+    func add_text(text:Text) Result<MeshHandle, TextError> {
+        match self.text_cache.build(text) {
+            failure(error) => { return Result<MeshHandle, TextError>.failure(error) }
+            success(built) => {
+                return Result<MeshHandle, TextError>.success(self.add(built.mesh))
+            }
+        }
+    }
+
+    func add_canvas_text(
+        layer:TextLayer,
+        plane:TextPlane,
+        tolerance:float = 0.0075
+    ) Result<MeshHandle, TextError> {
+        match self.text_cache.build_canvas(layer, plane, tolerance) {
+            failure(error) => { return Result<MeshHandle, TextError>.failure(error) }
+            success(built) => {
+                return Result<MeshHandle, TextError>.success(self.add(built.mesh))
+            }
+        }
+    }
+
+    func text_cache_stats() TextCacheStats { return self.text_cache.stats() }
+
+    func text_bounds(handle:MeshHandle) TextBounds {
+        let mesh = self.snapshot(handle)
+        let vertices = mesh.vertices()
+        if vertices.is_empty() {
+            panic("GFX.Scene3D cannot measure an empty text mesh")
+        }
+        var minimum = vertices[0].position
+        var maximum = minimum
+        for vertex in vertices {
+            minimum = minimum.minimum(vertex.position)
+            maximum = maximum.maximum(vertex.position)
+        }
+        return TextBounds(minimum:minimum, maximum:maximum)
     }
 
     func contains(handle:MeshHandle) bool {

@@ -32,6 +32,11 @@ public use GFX.Scene3D.SpotProjectorLightGizmo.SpotProjectorLightGizmo
 public use GFX.Scene3D.SunLight.SunLight
 public use GFX.Scene3D.SunLightGizmo.SunLightGizmo
 public use GFX.Scene3D.ToneMapping.ToneMapping
+public use GFX.Scene3D.Text.Text
+public use GFX.Scene3D.Text.TextBounds
+public use GFX.Scene3D.Text.TextCacheStats
+public use GFX.Scene3D.Text.TextError
+public use GFX.Scene3D.Text.TextPlane
 public use GFX.Scene3D.Transform.Transform
 public use GFX.Scene3D.TubeProjectorLight.TubeProjectorLight
 public use GFX.Scene3D.TubeProjectorLightGizmo.TubeProjectorLightGizmo
