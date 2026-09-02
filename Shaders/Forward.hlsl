@@ -745,7 +745,13 @@ float4 fragment_main(VertexOutput input, bool frontFace : SV_IsFrontFace) : SV_T
         albedoTransform,
         textureRotationsA.x
     );
-    const float4 sampledAlbedo = albedoMap.Sample(albedoSampler, albedoUv);
+    float4 sampledAlbedo = albedoMap.Sample(albedoSampler, albedoUv);
+    const bool canvasPanel = textureRotationsB.y > 0.5;
+    if (canvasPanel) {
+        sampledAlbedo.rgb = sampledAlbedo.a > 0.000001
+            ? sampledAlbedo.rgb / sampledAlbedo.a
+            : float3(0.0, 0.0, 0.0);
+    }
     const float4 surfaceColor = input.color * sampledAlbedo;
     const float alphaMode = materialSettings.x;
     if (alphaMode > 0.5 && alphaMode < 1.5) {
@@ -797,7 +803,13 @@ float4 fragment_main(VertexOutput input, bool frontFace : SV_IsFrontFace) : SV_T
     );
     const float3 albedo = surfaceColor.rgb;
     const bool unlit = materialSettings.w > 1.5;
-    if (unlit) return float4(tone_map(albedo), alpha);
+    if (unlit) {
+        const float3 mapped = tone_map(albedo);
+        return float4(
+            canvasPanel && alphaMode > 1.5 ? mapped * alpha : mapped,
+            alpha
+        );
+    }
     const float3 reflectance = lerp(0.04, albedo, metallic);
     const float3 ambientMaterial = albedo * (1.0 - metallic) +
         reflectance * (1.0 - roughness * 0.5);
@@ -829,5 +841,9 @@ float4 fragment_main(VertexOutput input, bool frontFace : SV_IsFrontFace) : SV_T
     );
     const float3 sampledEmission = emissionMap.Sample(emissionSampler, emissionUv).rgb;
     color += materialEmission.rgb * sampledEmission * materialSurface.w;
-    return float4(tone_map(color), alpha);
+    const float3 mapped = tone_map(color);
+    return float4(
+        canvasPanel && alphaMode > 1.5 ? mapped * alpha : mapped,
+        alpha
+    );
 }

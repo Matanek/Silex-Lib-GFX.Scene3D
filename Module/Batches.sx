@@ -1,4 +1,5 @@
 use GFX.GPU
+use GFX.Scene2D.CanvasSurface.CanvasSurface
 use GFX.Scene3D.Material
 use STD.Math
 
@@ -7,6 +8,7 @@ package struct DrawSettings {
     let alpha_cutoff:float
     let double_sided:bool
     let unlit:bool
+    let canvas_panel:bool
     let casts_shadows:bool
     let shadow_distance:float
     let shadow_cascades:int
@@ -17,6 +19,7 @@ package struct DrawSettings {
         alpha_cutoff:float = 0.5,
         double_sided:bool = false,
         unlit:bool = false,
+        canvas_panel:bool = false,
         casts_shadows:bool = true,
         shadow_distance:float = 0.0,
         shadow_cascades:int = 4
@@ -25,6 +28,7 @@ package struct DrawSettings {
         self.alpha_cutoff = alpha_cutoff
         self.double_sided = double_sided
         self.unlit = unlit
+        self.canvas_panel = canvas_panel
         self.casts_shadows = casts_shadows
         self.shadow_distance = shadow_distance
         self.shadow_cascades = shadow_cascades
@@ -42,6 +46,7 @@ package struct Draw {
     let settings:DrawSettings
     let distance:float
     let textures:GFX.Scene3D.Material.MaterialTextures
+    var panel_surface:CanvasSurface?
     let position:Math.Vec3
 }
 
@@ -157,11 +162,13 @@ package class Batch {
             self.settings.alpha_cutoff == draw.settings.alpha_cutoff &&
             self.settings.double_sided == draw.settings.double_sided &&
             self.settings.unlit == draw.settings.unlit &&
+            self.settings.canvas_panel == draw.settings.canvas_panel &&
             self.settings.casts_shadows == draw.settings.casts_shadows &&
             self.settings.shadow_distance == draw.settings.shadow_distance &&
             self.settings.shadow_cascades == draw.settings.shadow_cascades &&
             same_material(source.material, draw.material) &&
-            same_textures(source.textures, draw.textures)
+            same_textures(source.textures, draw.textures) &&
+            same_panel_surface(source.panel_surface, draw.panel_surface)
     }
 
     func needs_upload() bool {
@@ -219,6 +226,17 @@ package class Batch {
         self.active_chunks++
         return index
     }
+}
+
+func same_panel_surface(left:@CanvasSurface?, right:@CanvasSurface?) bool {
+    if let first = left {
+        if let second = right {
+            return first.device_generation() == second.device_generation() &&
+                first.revision() == second.revision()
+        }
+        return false
+    }
+    return right == null
 }
 
 struct ModelBounds {

@@ -1,5 +1,11 @@
 public use GFX.Scene3D.AmbientLight.AmbientLight
 public use GFX.Scene3D.Camera.Camera
+public use GFX.Scene3D.CanvasGeometry.CanvasGeometryError
+public use GFX.Scene3D.CanvasGeometry.PlaneMapping
+public use GFX.Scene3D.CanvasPanel.CanvasPanel
+public use GFX.Scene3D.CanvasPanel.CanvasPanelMaterial
+public use GFX.Scene3D.CanvasPanel.CanvasPanelStats
+public use GFX.Scene3D.CanvasPanel.CanvasPanels
 public use GFX.Scene3D.CubeProjectorLight.CubeProjectorLight
 public use GFX.Scene3D.CubeProjectorLightGizmo.CubeProjectorLightGizmo
 public use GFX.Scene3D.Grid.Grid
@@ -47,6 +53,8 @@ public use GFX.Scene3D.ViewportCamera.ViewportCamera
 contribute GFX.Components {
     public use GFX.Scene3D.AmbientLight as AmbientLight3D
     public use GFX.Scene3D.Camera as Camera3D
+    public use GFX.Scene3D.CanvasPanel.CanvasPanel as CanvasPanel3D
+    public use GFX.Scene3D.CanvasPanel.CanvasPanelMaterial as CanvasPanelMaterial3D
     public use GFX.Scene3D.CubeProjectorLight as CubeProjectorLight3D
     public use GFX.Scene3D.CubeProjectorLightGizmo as CubeProjectorLightGizmo3D
     public use GFX.Scene3D.Instances as Instances3D
@@ -83,6 +91,7 @@ contribute GFX.Plugins {
 }
 
 contribute GFX.Resources {
+    public use GFX.Scene3D.CanvasPanel.CanvasPanels as CanvasPanels3D
     public use GFX.Scene3D.Meshes as Meshes3D
     public use GFX.Scene3D.ViewportCamera.Controller as FirstPersonCamera3D
     public use GFX.Scene3D.Skybox.Skybox as Skybox3D

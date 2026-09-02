@@ -1,0 +1,59 @@
+use GFX.Canvas
+use GFX.Color
+use GFX.ECS
+use GFX.Scene3D
+use STD.Math
+
+test "consume Canvas panels geometry materials lights and receivers publicly" {
+    var drawing = Canvas.Canvas()
+    drawing.paint(func(painter:&Canvas.Painter) {
+        painter.fill(
+            Canvas.Circle(Math.Vec2(24.0), 18.0),
+            Canvas.Fill.solid(Color.cyan_300())
+        )
+        painter.text("Panel", Math.Vec2(6.0, 28.0), Canvas.TextStyle(size:12.0))
+    })
+    var world = ECS.World()
+    var meshes = Scene3D.Meshes()
+    let panel = world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 1.0, 0.0)))
+        ..with(Scene3D.CanvasPanel(
+            drawing,
+            Canvas.Rect(Math.Vec2(), Math.Vec2(48.0, 32.0)),
+            1.5,
+            Math.Vec2(3.0, 2.0)
+        ))
+        ..with(Scene3D.CanvasPanelMaterial(
+            alpha:Scene3D.AlphaMode.mask,
+            alpha_cutoff:0.25
+        ))
+    )
+    let receiver_mesh = meshes.add(Scene3D.Geometry.Plane.make(Math.Vec2(6.0)))
+    let receiver = world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.0, -1.0)))
+        ..with(Scene3D.Mesh(receiver_mesh, casts_shadows:false))
+        ..with(Scene3D.Material(roughness:0.9))
+    )
+    let light = world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.SunLight(direction:Math.Vec3(0.0, -0.5, -1.0).normalized()))
+    )
+
+    assert(world.has<Scene3D.CanvasPanel>(panel))
+    assert(world.has<Scene3D.CanvasPanelMaterial>(panel))
+    assert(world.has<Scene3D.Mesh>(receiver))
+    assert(world.has<Scene3D.SunLight>(light))
+
+    var snapshot = drawing.snapshot(48, 32)
+    match meshes.add_canvas_geometry(
+        snapshot,
+        Canvas.Rect(Math.Vec2(), Math.Vec2(48.0, 32.0)),
+        Scene3D.PlaneMapping(
+            origin:Math.Vec3(),
+            x_axis:Math.Vec3(0.05, 0.0, 0.0),
+            y_axis:Math.Vec3(0.0, 0.05, 0.0)
+        )
+    ) {
+        failure(error) => { panic(error.detail) }
+        success(handle) => { assert(meshes.snapshot(handle).triangle_count() > 2) }
+    }
+}

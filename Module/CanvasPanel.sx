@@ -1,0 +1,179 @@
+use GFX.Canvas.Canvas as AuthoredCanvas
+use GFX.Canvas.Shapes.Rect
+use GFX.Canvas.Snapshot
+use GFX.Color
+use GFX.GPU
+use GFX.Scene2D.Canvas.TextMode
+use GFX.Scene2D.CanvasSurface.CanvasSurface
+use GFX.Scene2D.CanvasSurface.CanvasSurfaceRenderer
+use GFX.Scene3D.Material.AlphaMode
+use Interop.C
+use STD.Math
+
+// A retained Canvas mapped onto a centered rectangular surface in local XY.
+// The authored logical frame, raster density, and world size are independent.
+public struct CanvasPanel {
+    private var authored:AuthoredCanvas
+    let frame:Rect
+    var density:float
+    var world_size:Math.Vec2
+    var text_mode:TextMode
+    var visible:bool
+    var casts_shadows:bool
+
+    init(
+        canvas:AuthoredCanvas,
+        frame:Rect,
+        density:float,
+        world_size:Math.Vec2,
+        text_mode:TextMode = TextMode.automatic
+    ) {
+        require_panel_frame(frame, density, world_size)
+        self.authored = canvas
+        self.frame = frame
+        self.density = density
+        self.world_size = world_size
+        self.text_mode = text_mode
+        self.visible = true
+        self.casts_shadows = true
+    }
+
+    func canvas() AuthoredCanvas { return self.authored }
+    func canvas_revision() int { return self.authored.revision() }
+
+    package func snapshot() Snapshot {
+        require_panel_frame(self.frame, self.density, self.world_size)
+        var drawing = self.authored
+        let width = Math.max(1.0, Math.ceil(self.frame.size.x)) as int
+        let height = Math.max(1.0, Math.ceil(self.frame.size.y)) as int
+        return drawing.snapshot(width, height)
+    }
+}
+
+// Dedicated material contract for premultiplied linear Canvas surfaces.
+public class CanvasPanelMaterial {
+    var albedo:Color
+    var metallic:float
+    var roughness:float
+    var occlusion:float
+    var emission:Color
+    var emission_intensity:float
+    var alpha:AlphaMode
+    var alpha_cutoff:float
+    var double_sided:bool
+    var unlit:bool
+
+    init(
+        albedo:Color = Color.white(),
+        metallic:float = 0.0,
+        roughness:float = 0.5,
+        occlusion:float = 1.0,
+        emission:Color = Color.black(),
+        emission_intensity:float = 0.0,
+        alpha:AlphaMode = AlphaMode.blend,
+        alpha_cutoff:float = 0.5,
+        double_sided:bool = true,
+        unlit:bool = false
+    ) {
+        require_panel_cutoff(alpha_cutoff)
+        self.albedo = albedo
+        self.metallic = metallic
+        self.roughness = roughness
+        self.occlusion = occlusion
+        self.emission = emission
+        self.emission_intensity = emission_intensity
+        self.alpha = alpha
+        self.alpha_cutoff = alpha_cutoff
+        self.double_sided = double_sided
+        self.unlit = unlit
+    }
+
+    static func unlit(
+        alpha:AlphaMode = AlphaMode.blend,
+        alpha_cutoff:float = 0.5
+    ) CanvasPanelMaterial {
+        return CanvasPanelMaterial(
+            alpha:alpha,
+            alpha_cutoff:alpha_cutoff,
+            unlit:true
+        )
+    }
+}
+
+public struct CanvasPanelStats {
+    let surface_updates:int
+    let surface_cache_hits:int
+    let shadow_passes:int
+}
+
+// Scene3D owns this resource. It delegates offscreen rendering to the public
+// Scene2D service while keeping Scene3D shadow accounting separate.
+public class CanvasPanels {
+    private var surfaces:CanvasSurfaceRenderer? = null
+    private var recorded_shadow_passes:int
+
+    module init() {
+        self.surfaces = null
+        self.recorded_shadow_passes = 0
+    }
+
+    func stats() CanvasPanelStats {
+        var updates = 0
+        var hits = 0
+        if let renderer = self.surfaces {
+            updates = renderer.render_count()
+            hits = renderer.cache_hit_count()
+        }
+        return CanvasPanelStats(
+            surface_updates:updates,
+            surface_cache_hits:hits,
+            shadow_passes:self.recorded_shadow_passes
+        )
+    }
+
+    package func bind(device:@GPU.Device) {
+        var retained = C.object_from_address<GPU.Device>(C.object_address(device))
+        self.surfaces = CanvasSurfaceRenderer(retained)
+    }
+
+    package func render(panel:@CanvasPanel) CanvasSurface {
+        var snapshot = panel.snapshot()
+        if let renderer = self.surfaces {
+            return renderer.render_exact(
+                snapshot,
+                panel.frame,
+                panel.density,
+                panel.text_mode
+            )
+        }
+        panic("GFX.Scene3D CanvasPanels is not bound to a GPU device")
+    }
+
+    package func record_shadow_passes(count:int) {
+        self.recorded_shadow_passes += count
+    }
+}
+
+func require_panel_frame(frame:Rect, density:float, world_size:Math.Vec2) {
+    if !finite_vector(frame.position) || !finite_vector(frame.size) ||
+        frame.size.x <= 0.0 || frame.size.y <= 0.0
+    {
+        panic("GFX.Scene3D CanvasPanel frame must be finite and positive")
+    }
+    if !Math.is_finite(density) || density <= 0.0 {
+        panic("GFX.Scene3D CanvasPanel density must be finite and positive")
+    }
+    if !finite_vector(world_size) || world_size.x <= 0.0 || world_size.y <= 0.0 {
+        panic("GFX.Scene3D CanvasPanel world size must be finite and positive")
+    }
+}
+
+func require_panel_cutoff(value:float) {
+    if !Math.is_finite(value) || value < 0.0 || value > 1.0 {
+        panic("GFX.Scene3D CanvasPanel alpha cutoff must be finite and between zero and one")
+    }
+}
+
+func finite_vector(value:Math.Vec2) bool {
+    return Math.is_finite(value.x) && Math.is_finite(value.y)
+}

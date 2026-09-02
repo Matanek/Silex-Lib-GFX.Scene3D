@@ -1,6 +1,11 @@
 use GFX.Scene3D.MeshHandle as MeshHandle
 use GFX.Scene3D.Geometry.Mesh as GeometryMesh
 use GFX.Canvas.TextLayer
+use GFX.Canvas.Shapes.Rect
+use GFX.Canvas.Snapshot
+use GFX.Scene3D.CanvasGeometry.CanvasGeometryError
+use GFX.Scene3D.CanvasGeometry.PlaneMapping
+use GFX.Scene3D.CanvasGeometry.build_canvas_geometry
 use GFX.Scene3D.Text
 use GFX.Scene3D.Text.TextBounds
 use GFX.Scene3D.Text.TextCache
@@ -57,6 +62,24 @@ public class Meshes {
             failure(error) => { return Result<MeshHandle, TextError>.failure(error) }
             success(built) => {
                 return Result<MeshHandle, TextError>.success(self.add(built.mesh))
+            }
+        }
+    }
+
+    func add_canvas_geometry(
+        snapshot:Snapshot,
+        frame:Rect,
+        mapping:PlaneMapping,
+        tolerance:float = 0.0075
+    ) Result<MeshHandle, CanvasGeometryError> {
+        match build_canvas_geometry(
+            snapshot, frame, mapping, tolerance, self.text_cache
+        ) {
+            failure(error) => {
+                return Result<MeshHandle, CanvasGeometryError>.failure(error)
+            }
+            success(mesh) => {
+                return Result<MeshHandle, CanvasGeometryError>.success(self.add(mesh))
             }
         }
     }

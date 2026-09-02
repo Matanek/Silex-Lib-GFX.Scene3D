@@ -1,0 +1,515 @@
+use GFX.Canvas.Geometry.Mesh as CanvasMesh
+use GFX.Canvas.Geometry.Vertex as CanvasVertex
+use GFX.Canvas.Shapes.Rect
+use GFX.Canvas.Snapshot
+use GFX.Color
+use GFX.Font
+use GFX.Scene3D.Geometry.Mesh as GeometryMesh
+use GFX.Scene3D.Geometry.Vertex
+use GFX.Scene3D.Text.TextCache
+use GFX.Scene3D.Text.TextError
+use GFX.Scene3D.Text.TextPlane
+use STD.Math
+
+public struct PlaneMapping {
+    let origin:Math.Vec3
+    let x_axis:Math.Vec3
+    let y_axis:Math.Vec3
+
+    init(origin:Math.Vec3, x_axis:Math.Vec3, y_axis:Math.Vec3) {
+        self.origin = origin
+        self.x_axis = x_axis
+        self.y_axis = y_axis
+    }
+}
+
+public struct CanvasGeometryError {
+    let detail:str
+    let face_identity:str
+    let glyph_id:uint32?
+    let cluster:Font.Cluster?
+}
+
+package func build_canvas_geometry(
+    snapshot:Snapshot,
+    frame:Rect,
+    mapping:PlaneMapping,
+    tolerance:float,
+    text_cache:@TextCache
+) Result<GeometryMesh, CanvasGeometryError> {
+    match validate_conversion(frame, mapping, tolerance) {
+        failure(error) => {
+            return Result<GeometryMesh, CanvasGeometryError>.failure(error)
+        }
+        success => {}
+    }
+    if !snapshot.vector_geometry_compatible() {
+        return Result<GeometryMesh, CanvasGeometryError>.failure(
+            geometry_error(
+                "Scene3D Canvas geometry rejects image fills and raster effects; use CanvasPanel"
+            )
+        )
+    }
+
+    var vertices:Vertex[] = []
+    var indices:uint32[] = []
+    let source = snapshot.geometry()
+    append_canvas_mesh(vertices, indices, source, frame, mapping)
+
+    var layers = snapshot.text_layers()
+    for layer in layers {
+        match text_cache.build_canvas(
+            layer,
+            TextPlane(
+                origin:mapping.origin,
+                x_axis:mapping.x_axis,
+                y_axis:mapping.y_axis
+            ),
+            tolerance
+        ) {
+            failure(error) => {
+                return Result<GeometryMesh, CanvasGeometryError>.failure(
+                    converted_text_error(error)
+                )
+            }
+            success(built) => {
+                append_text_mesh(
+                    vertices, indices, built.mesh, frame, mapping
+                )
+            }
+        }
+    }
+    if vertices.is_empty() || indices.is_empty() {
+        return Result<GeometryMesh, CanvasGeometryError>.failure(
+            geometry_error("Scene3D Canvas geometry has no drawable vector content")
+        )
+    }
+    return Result<GeometryMesh, CanvasGeometryError>.success(
+        GeometryMesh(vertices, indices)
+    )
+}
+
+func validate_conversion(
+    frame:Rect,
+    mapping:PlaneMapping,
+    tolerance:float
+) Result<void, CanvasGeometryError> {
+    if !finite2(frame.position) || !finite2(frame.size) ||
+        frame.size.x <= 0.0 || frame.size.y <= 0.0
+    {
+        return Result<void, CanvasGeometryError>.failure(
+            geometry_error("Scene3D Canvas geometry frame must be finite and positive")
+        )
+    }
+    let x_length = mapping.x_axis.length_squared()
+    let y_length = mapping.y_axis.length_squared()
+    let cross = mapping.x_axis.cross(mapping.y_axis)
+    if !finite3(mapping.origin) || !finite3(mapping.x_axis) ||
+        !finite3(mapping.y_axis) || x_length <= 0.0 || y_length <= 0.0 ||
+        cross.length_squared() <= x_length * y_length * 0.000000000001
+    {
+        return Result<void, CanvasGeometryError>.failure(geometry_error(
+            "Scene3D Canvas geometry plane axes must be non-zero and non-collinear"
+        ))
+    }
+    if !Math.is_finite(tolerance) || tolerance <= 0.0 {
+        return Result<void, CanvasGeometryError>.failure(geometry_error(
+            "Scene3D Canvas geometry tessellation tolerance must be finite and positive"
+        ))
+    }
+    return Result<void, CanvasGeometryError>.success()
+}
+
+func append_canvas_mesh(
+    output:&Vertex[],
+    indices:&uint32[],
+    mesh:CanvasMesh,
+    frame:Rect,
+    mapping:PlaneMapping
+) {
+    let source = mesh.vertices()
+    var cursor = 0
+    while cursor < source.count() {
+        if cursor + 5 < source.count() && analytic_vertex(source[cursor]) {
+            append_analytic(output, indices, source, cursor, frame, mapping)
+            cursor += 6
+        } else {
+            if cursor + 2 >= source.count() {
+                panic("GFX.Scene3D Canvas geometry encountered incomplete triangles")
+            }
+            append_source_triangle(
+                output, indices,
+                source[cursor], source[cursor + 1], source[cursor + 2],
+                frame, mapping
+            )
+            cursor += 3
+        }
+    }
+}
+
+func analytic_vertex(value:@CanvasVertex) bool {
+    return value.normal.z >= 0.0 || value.normal.z < -1.5 ||
+        (value.normal.x > 0.0 && value.normal.y > 0.0)
+}
+
+func append_analytic(
+    output:&Vertex[],
+    indices:&uint32[],
+    source:@CanvasVertex[],
+    start:int,
+    frame:Rect,
+    mapping:PlaneMapping
+) {
+    let first = source[start]
+    let second = source[start + 1]
+    let top_right = source[start + 2]
+    let bottom_left = source[start + 5]
+    let delta_x = second.uv.x - first.uv.x
+    let delta_y = bottom_left.uv.y - first.uv.y
+    var axis = Math.Vec2(1.0, 0.0)
+    var normal = Math.Vec2(0.0, 1.0)
+    if Math.abs(delta_x) > 0.000001 {
+        axis = Math.Vec2(
+            (second.position.x - first.position.x) / delta_x,
+            (second.position.y - first.position.y) / delta_x
+        )
+    }
+    if Math.abs(delta_y) > 0.000001 {
+        normal = Math.Vec2(
+            (bottom_left.position.x - first.position.x) / delta_y,
+            (bottom_left.position.y - first.position.y) / delta_y
+        )
+    }
+    let center = Math.Vec2(first.position.x, first.position.y)
+        .subtract(axis.multiply(first.uv.x))
+        .subtract(normal.multiply(first.uv.y))
+    let extent = Math.Vec2(Math.abs(first.uv.x), Math.abs(first.uv.y))
+    let colors:Color[] = [
+        first.color, second.color, top_right.color, bottom_left.color
+    ]
+    let shape = first.normal
+    let stroke = first.position.z
+    if shape.z < -1.5 {
+        append_line_shape(
+            output, indices, center, axis, normal, extent, shape,
+            colors, frame, mapping
+        )
+    } elif shape.z < 0.0 {
+        append_circle_shape(
+            output, indices, center, axis, normal, extent,
+            shape.x, stroke, colors, frame, mapping
+        )
+    } else {
+        append_rect_shape(
+            output, indices, center, axis, normal, extent,
+            Math.Vec2(shape.x, shape.y), shape.z, stroke,
+            colors, frame, mapping
+        )
+    }
+}
+
+func append_circle_shape(
+    output:&Vertex[], indices:&uint32[], center:Math.Vec2,
+    axis:Math.Vec2, normal:Math.Vec2, extent:Math.Vec2,
+    radius:float, stroke:float, colors:@Color[],
+    frame:Rect, mapping:PlaneMapping
+) {
+    let segments = 64
+    var outer:Math.Vec2[] = []
+    var inner:Math.Vec2[] = []
+    let half_stroke = stroke * 0.5
+    var outer_radius = radius
+    if stroke > 0.0 { outer_radius += half_stroke }
+    var index = 0
+    while index < segments {
+        let angle = Math.two_pi() * index as float / segments as float
+        let direction = Math.Vec2(Math.cos(angle), Math.sin(angle))
+        outer.append(direction.multiply(outer_radius))
+        if stroke > 0.0 {
+            inner.append(direction.multiply(Math.max(0.0, radius - half_stroke)))
+        }
+        index++
+    }
+    if stroke > 0.0 {
+        append_ring(output, indices, center, axis, normal, extent, colors,
+            outer, inner, frame, mapping)
+    } else {
+        append_fan(output, indices, center, axis, normal, extent, colors,
+            outer, frame, mapping)
+    }
+}
+
+func append_rect_shape(
+    output:&Vertex[], indices:&uint32[], center:Math.Vec2,
+    axis:Math.Vec2, normal:Math.Vec2, extent:Math.Vec2,
+    half:Math.Vec2, radius:float, stroke:float, colors:@Color[],
+    frame:Rect, mapping:PlaneMapping
+) {
+    if stroke <= 0.0 {
+        let boundary = rounded_boundary(half, radius, 8)
+        append_fan(output, indices, center, axis, normal, extent, colors,
+            boundary, frame, mapping)
+        return
+    }
+    let half_stroke = stroke * 0.5
+    let outer_half = half.add(Math.Vec2(half_stroke))
+    let inner_half = Math.Vec2(
+        Math.max(0.0, half.x - half_stroke),
+        Math.max(0.0, half.y - half_stroke)
+    )
+    let outer = rounded_boundary(outer_half, radius + half_stroke, 8)
+    let inner = rounded_boundary(
+        inner_half, Math.max(0.0, radius - half_stroke), 8
+    )
+    append_ring(output, indices, center, axis, normal, extent, colors,
+        outer, inner, frame, mapping)
+}
+
+func append_line_shape(
+    output:&Vertex[], indices:&uint32[], center:Math.Vec2,
+    axis:Math.Vec2, normal:Math.Vec2, extent:Math.Vec2,
+    shape:Math.Vec3, colors:@Color[], frame:Rect, mapping:PlaneMapping
+) {
+    var half_length = shape.x
+    let half_width = shape.y
+    if shape.z < -3.5 { half_length += half_width }
+    if shape.z > -3.5 && shape.z < -2.5 {
+        var boundary:Math.Vec2[] = []
+        let segments = 16
+        var index = 0
+        while index <= segments {
+            let angle = Math.pi() * 0.5 + Math.pi() * index as float / segments as float
+            boundary.append(Math.Vec2(
+                -half_length + Math.cos(angle) * half_width,
+                Math.sin(angle) * half_width
+            ))
+            index++
+        }
+        index = 0
+        while index <= segments {
+            let angle = -Math.pi() * 0.5 + Math.pi() * index as float / segments as float
+            boundary.append(Math.Vec2(
+                half_length + Math.cos(angle) * half_width,
+                Math.sin(angle) * half_width
+            ))
+            index++
+        }
+        append_fan(output, indices, center, axis, normal, extent, colors,
+            boundary, frame, mapping)
+        return
+    }
+    let boundary:Math.Vec2[] = [
+        Math.Vec2(-half_length, -half_width),
+        Math.Vec2(half_length, -half_width),
+        Math.Vec2(half_length, half_width),
+        Math.Vec2(-half_length, half_width)
+    ]
+    append_fan(output, indices, center, axis, normal, extent, colors,
+        boundary, frame, mapping)
+}
+
+func rounded_boundary(half:Math.Vec2, radius:float, segments:int) Math.Vec2[] {
+    let rounded = Math.min(Math.max(0.0, radius), Math.min(half.x, half.y))
+    if rounded <= 0.000001 {
+        return [
+            Math.Vec2(-half.x, -half.y), Math.Vec2(half.x, -half.y),
+            Math.Vec2(half.x, half.y), Math.Vec2(-half.x, half.y)
+        ]
+    }
+    let centers:Math.Vec2[] = [
+        Math.Vec2(half.x - rounded, half.y - rounded),
+        Math.Vec2(-half.x + rounded, half.y - rounded),
+        Math.Vec2(-half.x + rounded, -half.y + rounded),
+        Math.Vec2(half.x - rounded, -half.y + rounded)
+    ]
+    let starts:float[] = [0.0, Math.pi() * 0.5, Math.pi(), Math.pi() * 1.5]
+    var result:Math.Vec2[] = []
+    var corner = 0
+    while corner < 4 {
+        var index = 0
+        while index < segments {
+            let angle = starts[corner] + Math.pi() * 0.5 * index as float /
+                (segments - 1) as float
+            result.append(centers[corner].add(Math.Vec2(
+                Math.cos(angle) * rounded,
+                Math.sin(angle) * rounded
+            )))
+            index++
+        }
+        corner++
+    }
+    return result
+}
+
+func append_fan(
+    output:&Vertex[], indices:&uint32[], center:Math.Vec2,
+    axis:Math.Vec2, normal:Math.Vec2, extent:Math.Vec2, colors:@Color[],
+    boundary:@Math.Vec2[], frame:Rect, mapping:PlaneMapping
+) {
+    if boundary.count() < 3 { return }
+    var index = 1
+    while index + 1 < boundary.count() {
+        append_local_triangle(output, indices, center, axis, normal, extent,
+            colors, boundary[0], boundary[index], boundary[index + 1],
+            frame, mapping)
+        index++
+    }
+}
+
+func append_ring(
+    output:&Vertex[], indices:&uint32[], center:Math.Vec2,
+    axis:Math.Vec2, normal:Math.Vec2, extent:Math.Vec2, colors:@Color[],
+    outer:@Math.Vec2[], inner:@Math.Vec2[], frame:Rect, mapping:PlaneMapping
+) {
+    if outer.count() != inner.count() || outer.count() < 3 { return }
+    var index = 0
+    while index < outer.count() {
+        let next = (index + 1) % outer.count()
+        append_local_triangle(output, indices, center, axis, normal, extent,
+            colors, outer[index], outer[next], inner[next], frame, mapping)
+        append_local_triangle(output, indices, center, axis, normal, extent,
+            colors, outer[index], inner[next], inner[index], frame, mapping)
+        index++
+    }
+}
+
+func append_local_triangle(
+    output:&Vertex[], indices:&uint32[], center:Math.Vec2,
+    axis:Math.Vec2, normal:Math.Vec2, extent:Math.Vec2, colors:@Color[],
+    first:Math.Vec2, second:Math.Vec2, third:Math.Vec2,
+    frame:Rect, mapping:PlaneMapping
+) {
+    append_logical_triangle(
+        output, indices,
+        local_point(center, axis, normal, first), analytic_color(colors, extent, first),
+        local_point(center, axis, normal, second), analytic_color(colors, extent, second),
+        local_point(center, axis, normal, third), analytic_color(colors, extent, third),
+        frame, mapping
+    )
+}
+
+func local_point(
+    center:Math.Vec2,
+    axis:Math.Vec2,
+    normal:Math.Vec2,
+    coordinate:Math.Vec2
+) Math.Vec2 {
+    return center.add(axis.multiply(coordinate.x)).add(normal.multiply(coordinate.y))
+}
+
+func analytic_color(colors:@Color[], extent:Math.Vec2, point:Math.Vec2) Color {
+    let x = Math.clamp(point.x / Math.max(extent.x * 2.0, 0.000001) + 0.5, 0.0, 1.0)
+    let y = Math.clamp(point.y / Math.max(extent.y * 2.0, 0.000001) + 0.5, 0.0, 1.0)
+    let top = colors[0].lerp(colors[1], x)
+    let bottom = colors[3].lerp(colors[2], x)
+    return top.lerp(bottom, y)
+}
+
+func append_source_triangle(
+    output:&Vertex[], indices:&uint32[],
+    first:CanvasVertex, second:CanvasVertex, third:CanvasVertex,
+    frame:Rect, mapping:PlaneMapping
+) {
+    append_logical_triangle(
+        output, indices,
+        Math.Vec2(first.position.x, first.position.y), first.color,
+        Math.Vec2(second.position.x, second.position.y), second.color,
+        Math.Vec2(third.position.x, third.position.y), third.color,
+        frame, mapping
+    )
+}
+
+func append_logical_triangle(
+    output:&Vertex[], indices:&uint32[],
+    first:Math.Vec2, first_color:Color,
+    second:Math.Vec2, second_color:Color,
+    third:Math.Vec2, third_color:Color,
+    frame:Rect, mapping:PlaneMapping
+) {
+    let base = output.count() as uint32
+    let normal = mapping.x_axis.cross(mapping.y_axis).normalized()
+    output.append(converted_vertex(first, first_color, normal, frame, mapping))
+    output.append(converted_vertex(second, second_color, normal, frame, mapping))
+    output.append(converted_vertex(third, third_color, normal, frame, mapping))
+    indices.append(base)
+    indices.append(base + 1)
+    indices.append(base + 2)
+}
+
+func converted_vertex(
+    point:Math.Vec2,
+    color:Color,
+    normal:Math.Vec3,
+    frame:Rect,
+    mapping:PlaneMapping
+) Vertex {
+    return Vertex(
+        position:mapping.origin
+            .add(mapping.x_axis.multiply(point.x))
+            .add(mapping.y_axis.multiply(point.y)),
+        normal:normal,
+        uv:Math.Vec2(
+            (point.x - frame.position.x) / frame.size.x,
+            (point.y - frame.position.y) / frame.size.y
+        ),
+        color:color
+    )
+}
+
+func append_text_mesh(
+    output:&Vertex[],
+    indices:&uint32[],
+    mesh:GeometryMesh,
+    frame:Rect,
+    mapping:PlaneMapping
+) {
+    let base = output.count() as uint32
+    let xx = mapping.x_axis.dot(mapping.x_axis)
+    let xy = mapping.x_axis.dot(mapping.y_axis)
+    let yy = mapping.y_axis.dot(mapping.y_axis)
+    let determinant = xx * yy - xy * xy
+    for source in mesh.vertices() {
+        let delta = source.position.subtract(mapping.origin)
+        let projected_x = delta.dot(mapping.x_axis)
+        let projected_y = delta.dot(mapping.y_axis)
+        let logical_x = (projected_x * yy - projected_y * xy) / determinant
+        let logical_y = (projected_y * xx - projected_x * xy) / determinant
+        output.append(Vertex(
+            position:source.position,
+            normal:source.normal,
+            uv:Math.Vec2(
+                (logical_x - frame.position.x) / frame.size.x,
+                (logical_y - frame.position.y) / frame.size.y
+            ),
+            color:source.color
+        ))
+    }
+    for index in mesh.indices() { indices.append(base + index) }
+}
+
+func converted_text_error(error:TextError) CanvasGeometryError {
+    return CanvasGeometryError(
+        detail:error.detail,
+        face_identity:error.face_identity,
+        glyph_id:error.glyph_id,
+        cluster:error.cluster
+    )
+}
+
+func geometry_error(detail:str) CanvasGeometryError {
+    return CanvasGeometryError(
+        detail:detail,
+        face_identity:"",
+        glyph_id:null,
+        cluster:null
+    )
+}
+
+func finite2(value:Math.Vec2) bool {
+    return Math.is_finite(value.x) && Math.is_finite(value.y)
+}
+
+func finite3(value:Math.Vec3) bool {
+    return Math.is_finite(value.x) && Math.is_finite(value.y) &&
+        Math.is_finite(value.z)
+}

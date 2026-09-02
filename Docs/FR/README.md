@@ -163,6 +163,45 @@ passe d’ombre. Les modes `opaque` et `mask` existants fonctionnent sans textur
 alpha, puisque la silhouette et ses trous sont déjà décrits par les triangles.
 Extrusion, bevel et parois latérales ne font pas partie de cette version.
 
+## Panneaux Canvas et géométrie planaire
+
+`CanvasPanel` conserve un Canvas sur une surface rectangulaire Scene3D. Le
+frame logique, la densité fixe et la taille monde sont indépendants ; la
+texture mesure exactement `ceil(frame * density)`. Le service public
+`CanvasPanels` expose séparément mises à jour de surface, hits de cache et
+passes d’ombre. Déplacer le panneau ou une lumière ne rerastérise pas le
+Canvas ; modifier le dessin ne rafraîchit que sa surface.
+
+```silex
+world.spawn(ECS.EntityRecipe()
+    ..with(Scene3D.Transform(position:Math.Vec3(0.0, 1.0, 0.0)))
+    ..with(Scene3D.CanvasPanel(
+        drawing,
+        Canvas.Rect(Math.Vec2(), Math.Vec2(320.0, 180.0)),
+        1.5,
+        Math.Vec2(3.2, 1.8)
+    ))
+    ..with(Scene3D.CanvasPanelMaterial(
+        alpha:Scene3D.AlphaMode.mask,
+        alpha_cutoff:0.2
+    ))
+)
+```
+
+Le matériau dédié échantillonne la surface linéaire prémultipliée, la remet en
+alpha droit pour l’éclairage, puis prémultiplie la sortie blend. Les modes
+`opaque`, `mask`, `blend` et `unlit` sont explicites. Une ombre alpha-mask
+échantillonne la couverture du Canvas ; elle ne projette pas le rectangle
+plein. Une surface blend conserve les limites de tri des transparences 3D.
+
+`Meshes.add_canvas_geometry` exprime l’autre intention. Il convertit les formes
+vectorielles, gradients linéaires et textes à contours vers des positions,
+normales et UV physiques selon un `PlaneMapping`. Les cercles et rectangles
+arrondis sont réellement tessellés, donc leurs ombres respectent la
+silhouette. ImagePaint, effets raster, frame dégénéré et axes colinéaires sont
+refusés explicitement ; utiliser `CanvasPanel` pour ces cas. La conversion ne
+crée ni extrusion ni bevel.
+
 ## Ombres solaires ajustées à la caméra
 
 Un `SunLight` avec `shadow_follows_camera` répartit l’atlas sur quatre cascades

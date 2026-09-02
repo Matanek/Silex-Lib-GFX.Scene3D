@@ -94,6 +94,7 @@ func material(
     alpha_cutoff:float,
     double_sided:bool,
     unlit:bool,
+    canvas_panel:bool,
     camera_position:Math.Vec3
 ) str {
     var bytes = storage(176)
@@ -126,9 +127,11 @@ func material(
         texture_rotation(textures.metallic_roughness),
         texture_rotation(textures.occlusion)
     ))
+    var panel_flag = 0.0
+    if canvas_panel { panel_flag = 1.0 }
     write_vec4(address, 160, Math.Vec4(
         texture_rotation(textures.emission),
-        0.0,
+        panel_flag,
         0.0,
         0.0
     ))

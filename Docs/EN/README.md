@@ -188,6 +188,45 @@ The existing `opaque` and `mask` modes work without an alpha texture because
 the triangles already describe the silhouette and its holes. Extrusion,
 bevels, and side walls are outside this version.
 
+## Canvas panels and planar geometry
+
+`CanvasPanel` retains a Canvas on a rectangular Scene3D surface. Its logical
+frame, fixed density, and world size are independent; the texture is exactly
+`ceil(frame * density)` pixels. The public `CanvasPanels` resource reports
+surface updates, cache hits, and shadow passes separately. Moving the panel or
+a light does not rerasterize the Canvas; changing the drawing only refreshes
+its own surface.
+
+```silex
+world.spawn(ECS.EntityRecipe()
+    ..with(Scene3D.Transform(position:Math.Vec3(0.0, 1.0, 0.0)))
+    ..with(Scene3D.CanvasPanel(
+        drawing,
+        Canvas.Rect(Math.Vec2(), Math.Vec2(320.0, 180.0)),
+        1.5,
+        Math.Vec2(3.2, 1.8)
+    ))
+    ..with(Scene3D.CanvasPanelMaterial(
+        alpha:Scene3D.AlphaMode.mask,
+        alpha_cutoff:0.2
+    ))
+)
+```
+
+The dedicated material samples the premultiplied linear surface, converts it
+to straight alpha for lighting, and premultiplies blend output again. The
+`opaque`, `mask`, `blend`, and `unlit` modes are explicit. Alpha-mask shadows
+sample Canvas coverage instead of projecting the full rectangle. Blend
+surfaces keep Scene3D's normal transparency-ordering limitations.
+
+`Meshes.add_canvas_geometry` expresses the other intent. It converts vector
+shapes, linear gradients, and outlined text into physical positions, normals,
+and UVs through a `PlaneMapping`. Circles and rounded rectangles are actually
+tessellated, so their shadows preserve the silhouette. ImagePaint, raster
+effects, degenerate frames, and collinear axes fail explicitly; use
+`CanvasPanel` for those cases. The conversion does not create extrusion or
+bevels.
+
 ## Camera-fitted sun shadows
 
 A `SunLight` whose `shadow_follows_camera` value is enabled distributes its

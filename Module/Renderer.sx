@@ -2,6 +2,10 @@ use GFX.Assets.Image
 use GFX.Color
 use GFX.ECS
 use GFX.GPU
+use GFX.Scene2D.CanvasSurface.CanvasSurface
+use GFX.Scene3D.CanvasPanel.CanvasPanel
+use GFX.Scene3D.CanvasPanel.CanvasPanelMaterial
+use GFX.Scene3D.CanvasPanel.CanvasPanels
 use GFX.Scene3D.Camera
 use GFX.Scene3D.Batches.Batch
 use GFX.Scene3D.Batches.Draw
@@ -18,6 +22,7 @@ use GFX.Scene3D.Material.MaterialTextures
 use GFX.Scene3D.Mesh
 use GFX.Scene3D.MeshHandle
 use GFX.Scene3D.Meshes
+use GFX.Scene3D.Geometry.Plane
 use GFX.Scene3D.Packing
 use GFX.Scene3D.Shadows
 use GFX.Scene3D.Skybox.Skybox
@@ -85,8 +90,12 @@ package class Renderer {
     private var double_sided_pipeline:GPU.GraphicsPipeline? = null
     private var transparent_pipeline:GPU.GraphicsPipeline? = null
     private var transparent_double_sided_pipeline:GPU.GraphicsPipeline? = null
+    private var panel_transparent_pipeline:GPU.GraphicsPipeline? = null
+    private var panel_transparent_double_sided_pipeline:GPU.GraphicsPipeline? = null
     private var shadow_pipeline:GPU.GraphicsPipeline? = null
     private var point_shadow_pipeline:GPU.GraphicsPipeline? = null
+    private var panel_shadow_pipeline:GPU.GraphicsPipeline? = null
+    private var panel_point_shadow_pipeline:GPU.GraphicsPipeline? = null
     private var gizmo_pipeline:GPU.GraphicsPipeline? = null
     private var grid_pipeline:GPU.GraphicsPipeline? = null
     private var skybox_pipeline:GPU.GraphicsPipeline? = null
@@ -115,6 +124,7 @@ package class Renderer {
     private var shadow_sampler:GPU.Sampler? = null
     private var shadow_depth_format:GPU.TextureFormat
     private var material_sampler:GPU.Sampler? = null
+    private var panel_sampler:GPU.Sampler? = null
     private var white_srgb:GPU.Texture? = null
     private var white_linear:GPU.Texture? = null
     private var normal_default:GPU.Texture? = null
@@ -124,6 +134,7 @@ package class Renderer {
     private var gizmo_capacity:int
     private var gizmo_count:int
     private var grid:Grid? = null
+    private var panel_mesh:MeshHandle
 
     init() {
         self.meshes = []
@@ -150,12 +161,14 @@ package class Renderer {
         self.shadow_depth_format = GPU.TextureFormat.depth16
         self.gizmo_capacity = 0
         self.gizmo_count = 0
+        self.panel_mesh = MeshHandle()
     }
 
     func start(
         device:@GPU.Device,
         surface:@GPU.Surface,
-        samples:GPU.Samples
+        samples:GPU.Samples,
+        catalog:&Meshes
     ) {
         self.shadow_depth_format = best_shadow_depth_format(device)
         self.pipeline = forward_pipeline(device, surface, false, false, samples)
@@ -168,10 +181,22 @@ package class Renderer {
             true,
             samples
         )
+        self.panel_transparent_pipeline = forward_pipeline(
+            device, surface, false, true, samples, true
+        )
+        self.panel_transparent_double_sided_pipeline = forward_pipeline(
+            device, surface, true, true, samples, true
+        )
         self.shadow_pipeline = shadow_pipeline(
             device, false, self.shadow_depth_format
         )
         self.point_shadow_pipeline = shadow_pipeline(
+            device, true, self.shadow_depth_format
+        )
+        self.panel_shadow_pipeline = canvas_panel_shadow_pipeline(
+            device, false, self.shadow_depth_format
+        )
+        self.panel_point_shadow_pipeline = canvas_panel_shadow_pipeline(
             device, true, self.shadow_depth_format
         )
         self.gizmo_pipeline = gizmo_pipeline(device, surface, samples)
@@ -190,6 +215,14 @@ package class Renderer {
             anisotropic:true,
             name:"GFX.Scene3D material sampler"
         ))
+        self.panel_sampler = device.sampler(GPU.SamplerSettings(
+            min_filter:GPU.Filter.linear,
+            mag_filter:GPU.Filter.linear,
+            address_u:GPU.AddressMode.clamp_to_edge,
+            address_v:GPU.AddressMode.clamp_to_edge,
+            name:"GFX.Scene3D Canvas panel sampler"
+        ))
+        self.panel_mesh = catalog.add(Plane.make())
         self.white_srgb = upload_texture(
             device,
             Image.solid(Color.white()),
@@ -282,14 +315,77 @@ package class Renderer {
             settings:settings,
             distance:position.subtract(self.camera_position).length_squared(),
             textures:textures,
+            panel_surface:null,
             position:position
+        ))
+    }
+
+    func collect_panel(
+        world:@ECS.World,
+        entity:ECS.Entity,
+        transform:@Transform,
+        panel:@CanvasPanel,
+        panels:&CanvasPanels
+    ) {
+        if !panel.visible || !self.panel_mesh.is_valid() { return }
+        if world.has<CanvasPanelMaterial>(entity) {
+            let configured = world.get<CanvasPanelMaterial>(entity)
+            self.append_panel_draw(transform, panel, configured, panels)
+            return
+        }
+        var configured = CanvasPanelMaterial()
+        self.append_panel_draw(transform, panel, configured, panels)
+    }
+
+    private func append_panel_draw(
+        transform:@Transform,
+        panel:@CanvasPanel,
+        configured:@CanvasPanelMaterial,
+        panels:&CanvasPanels
+    ) {
+        var surface = panels.render(panel)
+        let panel_scale = Math.Mat4.transform(
+            Math.Vec3(),
+            Math.Quat().to_mat3(),
+            Math.Vec3(panel.world_size.x, panel.world_size.y, 1.0)
+        )
+        let model = transform.matrix().multiply(panel_scale)
+        var cache = self.cache_for(self.panel_mesh)
+        self.draws.append(Draw(
+            cache:self.index_of(cache),
+            model:model,
+            instance_cache:-1,
+            instance_identity:0,
+            instance_revision:0,
+            instance_parent:model,
+            material:Material(
+                albedo:configured.albedo,
+                metallic:configured.metallic,
+                roughness:configured.roughness,
+                occlusion:configured.occlusion,
+                emission:configured.emission,
+                emission_intensity:configured.emission_intensity
+            ),
+            settings:DrawSettings(
+                alpha:configured.alpha,
+                alpha_cutoff:configured.alpha_cutoff,
+                double_sided:configured.double_sided,
+                unlit:configured.unlit,
+                canvas_panel:true,
+                casts_shadows:panel.casts_shadows
+            ),
+            distance:transform.position.subtract(self.camera_position).length_squared(),
+            textures:MaterialTextures(),
+            panel_surface:surface,
+            position:transform.position
         ))
     }
 
     func finish_prepare(
         device:@GPU.Device,
         catalog:@Meshes,
-        images:@Image.Store
+        images:@Image.Store,
+        panels:&CanvasPanels
     ) {
         sort_draws(self.draws)
         self.rebuild_batches(device)
@@ -316,7 +412,7 @@ package class Renderer {
         self.tone_mapping_uniform = tone_mapping_uniform
         self.skybox_background_uniform = skybox_background_uniform
         self.prepare_gizmos(device)
-        self.render_shadows(device)
+        self.render_shadows(device, panels)
         self.prune_instance_models()
     }
 
@@ -357,10 +453,15 @@ package class Renderer {
                 batch_index++
                 continue
             }
-            let source = self.draws[batch.draw_index]
+            var source = self.draws[batch.draw_index]
             if let pipeline = self.pipeline_for(batch.settings) {
                 pass.bind(pipeline)
-                self.bind_material_textures(pass, source.textures)
+                if source.settings.canvas_panel {
+                    self.bind_panel_surface(pass, source.panel_surface)
+                    self.bind_panel_defaults(pass)
+                } else {
+                    self.bind_material_textures(pass, source.textures)
+                }
                 var cache = self.meshes[batch.cache]
                 if let vertices = cache.vertices {
                     if let indices = cache.indices {
@@ -376,6 +477,7 @@ package class Renderer {
                                 source.settings.alpha_cutoff,
                                 source.settings.double_sided,
                                 source.settings.unlit,
+                                source.settings.canvas_panel,
                                 self.camera_position
                             )
                             pass.vertex_uniform(0, vertex_uniform, 80)
@@ -418,7 +520,7 @@ package class Renderer {
         self.active_batches = 0
         var draw_index = 0
         while draw_index < self.draws.count() {
-            let draw = self.draws[draw_index]
+            var draw = self.draws[draw_index]
             if draw.settings.alpha != GFX.Scene3D.Material.AlphaMode.blend {
                 var index = 0
                 if draw.instance_revision > 0 {
@@ -440,7 +542,7 @@ package class Renderer {
         }
         draw_index = 0
         while draw_index < self.draws.count() {
-            let draw = self.draws[draw_index]
+            var draw = self.draws[draw_index]
             if draw.settings.alpha == GFX.Scene3D.Material.AlphaMode.blend {
                 if draw.instance_revision > 0 {
                     var cached = self.instance_models[draw.instance_cache]
@@ -467,7 +569,7 @@ package class Renderer {
         var index = 0
         while index < self.active_batches {
             var batch = self.batches[index]
-            let source = self.draws[batch.draw_index]
+            var source = self.draws[batch.draw_index]
             if batch.accepts(source, draw) { return index }
             index++
         }
@@ -622,7 +724,7 @@ package class Renderer {
     ) {
         var index = 0
         while index < self.active_batches {
-            let source = self.draws[self.batches[index].draw_index]
+            var source = self.draws[self.batches[index].draw_index]
             var cache = self.meshes[source.cache]
             self.refresh(
                 device,
@@ -837,8 +939,9 @@ package class Renderer {
         }
     }
 
-    private func render_shadows(device:@GPU.Device) {
+    private func render_shadows(device:@GPU.Device, panels:&CanvasPanels) {
         if self.shadows.face_count() == 0 { return }
+        var panel_shadow_passes = 0
         self.ensure_shadow_resources(device, Shadows.atlas_size())
         if let texture = self.shadow_texture {
             var commands = device.commands()
@@ -853,11 +956,6 @@ package class Renderer {
             ))
             let tile = self.shadow_atlas_size / self.shadows.grid()
             for face in self.shadows.all_faces() {
-                if face.point {
-                    if let pipeline = self.point_shadow_pipeline { pass.bind(pipeline) }
-                } else {
-                    if let pipeline = self.shadow_pipeline { pass.bind(pipeline) }
-                }
                 let slot = face.face_index + self.shadows.first_face(face.light_index)
                 let x = (slot % self.shadows.grid()) * tile
                 let y = (slot / self.shadows.grid()) * tile
@@ -872,7 +970,11 @@ package class Renderer {
                 var batch_index = 0
                 while batch_index < self.active_batches {
                     var batch = self.batches[batch_index]
-                    if batch.settings.alpha != GFX.Scene3D.Material.AlphaMode.opaque {
+                    let panel_mask = batch.settings.canvas_panel &&
+                        batch.settings.alpha == GFX.Scene3D.Material.AlphaMode.mask
+                    if batch.settings.alpha != GFX.Scene3D.Material.AlphaMode.opaque &&
+                        !panel_mask
+                    {
                         batch_index++
                         continue
                     }
@@ -882,6 +984,31 @@ package class Renderer {
                     {
                         batch_index++
                         continue
+                    }
+                    var source = self.draws[batch.draw_index]
+                    if panel_mask {
+                        if face.point {
+                            if let pipeline = self.panel_point_shadow_pipeline {
+                                pass.bind(pipeline)
+                            }
+                        } else {
+                            if let pipeline = self.panel_shadow_pipeline {
+                                pass.bind(pipeline)
+                            }
+                        }
+                        self.bind_panel_surface(pass, source.panel_surface)
+                        var cutoff = Packing.vector(Math.Vec4(
+                            batch.settings.alpha_cutoff, 0.0, 0.0, 0.0
+                        ))
+                        if face.point {
+                            pass.fragment_uniform(1, cutoff, 16)
+                        } else {
+                            pass.fragment_uniform(0, cutoff, 16)
+                        }
+                    } elif face.point {
+                        if let pipeline = self.point_shadow_pipeline { pass.bind(pipeline) }
+                    } else {
+                        if let pipeline = self.shadow_pipeline { pass.bind(pipeline) }
                     }
                     var cache = self.meshes[batch.cache]
                     if let vertices = cache.vertices {
@@ -906,10 +1033,13 @@ package class Renderer {
                                         ) {
                                             if let chunk_instances = chunk.instances {
                                                 pass.vertex_buffer(1, chunk_instances)
-                                                pass.draw_indexed(
-                                                    cache.index_count,
-                                                    chunk.models.count()
-                                                )
+                                            pass.draw_indexed(
+                                                cache.index_count,
+                                                chunk.models.count()
+                                            )
+                                            if batch.settings.canvas_panel {
+                                                panel_shadow_passes++
+                                            }
                                             }
                                         }
                                         chunk_index++
@@ -930,6 +1060,9 @@ package class Renderer {
                                         cache.index_count,
                                         batch.models.count()
                                     )
+                                    if batch.settings.canvas_panel {
+                                        panel_shadow_passes++
+                                    }
                                 }
                             }
                         }
@@ -939,6 +1072,7 @@ package class Renderer {
             }
             pass.finish()
             commands.submit()
+            panels.record_shadow_passes(panel_shadow_passes)
         }
     }
 
@@ -1009,6 +1143,12 @@ package class Renderer {
 
     private func pipeline_for(settings:DrawSettings) GPU.GraphicsPipeline? {
         if settings.alpha == GFX.Scene3D.Material.AlphaMode.blend {
+            if settings.canvas_panel {
+                if settings.double_sided {
+                    return self.panel_transparent_double_sided_pipeline
+                }
+                return self.panel_transparent_pipeline
+            }
             if settings.double_sided {
                 return self.transparent_double_sided_pipeline
             }
@@ -1054,6 +1194,38 @@ package class Renderer {
             true,
             self.white_srgb
         )
+    }
+
+    private func bind_panel_surface(
+        pass:@GPU.RenderPass,
+        selected:CanvasSurface?
+    ) {
+        if let surface = selected {
+            if let sampler = self.panel_sampler {
+                pass.fragment_sampler(1, surface.texture(), sampler)
+                return
+            }
+        }
+        if let sampler = self.panel_sampler {
+            if let fallback = self.white_linear {
+                pass.fragment_sampler(1, fallback, sampler)
+            }
+        }
+    }
+
+    private func bind_panel_defaults(pass:@GPU.RenderPass) {
+        if let sampler = self.material_sampler {
+            if let normal = self.normal_default {
+                pass.fragment_sampler(2, normal, sampler)
+            }
+            if let linear = self.white_linear {
+                pass.fragment_sampler(3, linear, sampler)
+                pass.fragment_sampler(4, linear, sampler)
+            }
+            if let color = self.white_srgb {
+                pass.fragment_sampler(5, color, sampler)
+            }
+        }
     }
 
     private func bind_material_texture(
@@ -1275,16 +1447,19 @@ local func forward_pipeline(
     surface:@GPU.Surface,
     double_sided:bool,
     transparent:bool,
-    samples:GPU.Samples
+    samples:GPU.Samples,
+    premultiplied:bool = false
 ) GPU.GraphicsPipeline {
     var cull = GPU.Cull.back
     if double_sided { cull = GPU.Cull.none }
     var targets:GPU.ColorTargetFormat[] = []
     if transparent {
+        var source_color = GPU.BlendFactor.source_alpha
+        if premultiplied { source_color = GPU.BlendFactor.one }
         targets.append(GPU.ColorTargetFormat(
             format:surface.format(),
             blend:GPU.BlendState(
-                source_color:GPU.BlendFactor.source_alpha,
+                source_color:source_color,
                 destination_color:GPU.BlendFactor.one_minus_source_alpha,
                 source_alpha:GPU.BlendFactor.one,
                 destination_alpha:GPU.BlendFactor.one_minus_source_alpha,
@@ -1300,6 +1475,7 @@ local func forward_pipeline(
     if transparent && double_sided {
         name = "GFX.Scene3D transparent double-sided meshes"
     }
+    if premultiplied { name = "GFX.Scene3D premultiplied Canvas panels" }
     return device.graphics_pipeline(
         GPU.ShaderProgram.hlsl(file:"../Shaders/Forward.hlsl"),
         GPU.GraphicsPipelineSettings(
@@ -1317,6 +1493,36 @@ local func forward_pipeline(
             name:name
         )
     )
+}
+
+local func canvas_panel_shadow_pipeline(
+    device:@GPU.Device,
+    point:bool,
+    depth_format:GPU.TextureFormat
+) GPU.GraphicsPipeline {
+    var shader = GPU.ShaderProgram.hlsl(file:"../Shaders/CanvasPanelShadow.hlsl")
+    var name = "GFX.Scene3D alpha-masked Canvas panel shadows"
+    if point {
+        shader = GPU.ShaderProgram.hlsl(file:"../Shaders/CanvasPanelPointShadow.hlsl")
+        name = "GFX.Scene3D alpha-masked Canvas panel point shadows"
+    }
+    return device.graphics_pipeline(shader, GPU.GraphicsPipelineSettings(
+        vertex_buffers:mesh_buffers(),
+        attributes:mesh_attributes(),
+        rasterizer:GPU.RasterizerState(
+            cull:GPU.Cull.back,
+            depth_bias:2.0,
+            depth_bias_slope:3.0,
+            bias_depth:true
+        ),
+        depth_stencil:GPU.DepthStencilState(
+            depth_compare:GPU.Compare.less,
+            depth_test:true,
+            depth_write:true
+        ),
+        depth_stencil_format:depth_format,
+        name:name
+    ))
 }
 
 local func shadow_pipeline(

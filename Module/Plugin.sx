@@ -4,6 +4,8 @@ use GFX.Application.Schedule
 use GFX.Assets.Image
 use GFX.ECS
 use GFX.GPU
+use GFX.Scene3D.CanvasPanel.CanvasPanel
+use GFX.Scene3D.CanvasPanel.CanvasPanels
 use GFX.Rendering
 use GFX.Rendering.Renderer as RenderingRenderer
 use GFX.Scene3D.Meshes
@@ -31,6 +33,7 @@ public struct Plugin:PluginProtocol {
             host.add_resource(Skybox.none())
         }
         if !host.resources().has<ToneMapping>() { host.add_resource(ToneMapping.aces()) }
+        if !host.resources().has<CanvasPanels>() { host.add_resource(CanvasPanels()) }
         host.add_resource(Renderer())
         {
             var resources = host.resources()
@@ -58,9 +61,12 @@ func start_scene(
     device:@GPU.Device,
     surface:@GPU.Surface,
     rendering:@RenderingRenderer,
-    renderer:&Renderer
+    renderer:&Renderer,
+    meshes:&Meshes,
+    panels:&CanvasPanels
 ) {
-    renderer.start(device, surface, rendering.sample_count())
+    renderer.start(device, surface, rendering.sample_count(), meshes)
+    panels.bind(device)
 }
 
 func update_viewport(window:@Window, renderer:&Renderer) {
@@ -79,15 +85,20 @@ func prepare_scene(
     device:@GPU.Device,
     world:@ECS.World,
     query:ECS.Query<(ECS.Entity, @Transform, @Mesh)>,
+    panel_query:ECS.Query<(ECS.Entity, @Transform, @CanvasPanel)>,
     meshes:@Meshes,
     images:@Image.Store,
-    renderer:&Renderer
+    renderer:&Renderer,
+    panels:&CanvasPanels
 ) {
     renderer.begin_prepare(world)
     for (entity, transform, mesh) in query {
         renderer.collect(world, entity, transform, mesh, meshes)
     }
-    renderer.finish_prepare(device, meshes, images)
+    for (entity, transform, panel) in panel_query {
+        renderer.collect_panel(world, entity, transform, panel, panels)
+    }
+    renderer.finish_prepare(device, meshes, images, panels)
 }
 
 func render_scene(pass:@GPU.RenderPass, application:@Application) {
@@ -96,6 +107,8 @@ func render_scene(pass:@GPU.RenderPass, application:@Application) {
 }
 
 func stop_scene(application:Application) {
+    var panels = application.resources().remove<CanvasPanels>()
+    assert(panels != null)
     var removed = application.resources().remove<Renderer>()
     assert(removed != null)
 }

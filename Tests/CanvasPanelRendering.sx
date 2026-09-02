@@ -1,0 +1,144 @@
+use GFX.Application
+use GFX.Canvas
+use GFX.Color
+use GFX.ECS
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+class PanelProbe {
+    var drawing:Canvas.Canvas
+    var entity:ECS.Entity
+    var frames:int
+    var first_updates:int
+    var transform_updates:int
+    var mutated_updates:int
+    var shadow_passes:int
+
+    init() {
+        self.drawing = Canvas.Canvas()
+        self.entity = ECS.Entity()
+        self.frames = 0
+        self.first_updates = 0
+        self.transform_updates = 0
+        self.mutated_updates = 0
+        self.shadow_passes = 0
+    }
+}
+
+func create_panel_scene(
+    world:&ECS.World,
+    meshes:&Scene3D.Meshes,
+    probe:&PanelProbe
+) {
+    var drawing = Canvas.Canvas()
+    drawing.paint(func(painter:&Canvas.Painter) {
+        painter.fill(
+            Canvas.Circle(Math.Vec2(32.0), 22.0),
+            Canvas.Fill.solid(Color.cyan_300().with_alpha(0.75))
+        )
+        painter.text(
+            "GFX",
+            Math.Vec2(14.0, 38.0),
+            Canvas.TextStyle(size:13.0, color:Color.white())
+        )
+    })
+    probe.drawing = drawing
+    probe.entity = world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform())
+        ..with(Scene3D.CanvasPanel(
+            drawing,
+            Canvas.Rect(Math.Vec2(), Math.Vec2(64.0)),
+            1.0,
+            Math.Vec2(2.0)
+        ))
+        ..with(Scene3D.CanvasPanelMaterial(
+            roughness:0.7,
+            alpha:Scene3D.AlphaMode.mask,
+            alpha_cutoff:0.2
+        ))
+    )
+
+    let receiver = meshes.add(Scene3D.Geometry.Plane.make(Math.Vec2(5.0)))
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.0, -1.0)))
+        ..with(Scene3D.Mesh(receiver, casts_shadows:false))
+        ..with(Scene3D.Material(albedo:Color.slate_400(), roughness:0.9))
+        ..with(Scene3D.MaterialSettings(double_sided:true))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.0, 7.0)))
+        ..with(Scene3D.Camera())
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.SunLight(direction:Math.Vec3(0.2, -0.4, -1.0).normalized()))
+    )
+}
+
+func inspect_panel_cache(
+    probe:&PanelProbe,
+    panels:@Scene3D.CanvasPanels,
+    world:&ECS.World,
+    controller:&Application.Controller
+) {
+    probe.frames++
+    let stats = panels.stats()
+    probe.shadow_passes = stats.shadow_passes
+    if probe.frames == 1 {
+        probe.first_updates = stats.surface_updates
+        world.update<Scene3D.Transform>(
+            probe.entity,
+            func(transform:&Scene3D.Transform) {
+                transform.position.x = 0.25
+            }
+        )
+    } elif probe.frames == 2 {
+        probe.transform_updates = stats.surface_updates
+        probe.drawing.paint(func(painter:&Canvas.Painter) {
+            painter.fill(
+                Canvas.Rect(Math.Vec2(3.0), Math.Vec2(8.0)),
+                Canvas.Fill.solid(Color.rose_400())
+            )
+        })
+    } elif probe.frames >= 3 {
+        probe.mutated_updates = stats.surface_updates
+        controller.stop()
+    }
+}
+
+test "render an alpha-masked lit Canvas panel without rerasterizing transforms" {
+    var application = Application()
+        ..add_plugin(WindowPlugin(WindowPlugin.Settings()
+            ..title = "Scene3D hidden Canvas panel test"
+            ..width = 64
+            ..height = 64
+            ..hidden = true
+        ))
+        ..add_plugin(Scene3D.Plugin())
+        ..add_system(Application.Schedule.startup, create_panel_scene)
+        ..add_after_system(Application.Schedule.render, inspect_panel_cache)
+    var resources = application.resources()
+    resources.insert(PanelProbe())
+
+    assert(application.run() == 0)
+    let probe = resources.get<PanelProbe>()
+    assert(probe.frames == 3)
+    assert(probe.first_updates == 1)
+    assert(probe.transform_updates == probe.first_updates)
+    assert(probe.mutated_updates == probe.first_updates + 1)
+    assert(probe.shadow_passes > 0)
+}
+
+test "expose opaque mask blend and unlit Canvas panel material modes" {
+    var opaque = Scene3D.CanvasPanelMaterial(alpha:Scene3D.AlphaMode.opaque)
+    var masked = Scene3D.CanvasPanelMaterial(
+        alpha:Scene3D.AlphaMode.mask,
+        alpha_cutoff:0.35
+    )
+    var blended = Scene3D.CanvasPanelMaterial(alpha:Scene3D.AlphaMode.blend)
+    var unlit = Scene3D.CanvasPanelMaterial.unlit()
+    assert(opaque.alpha == Scene3D.AlphaMode.opaque)
+    assert(masked.alpha_cutoff == 0.35)
+    assert(blended.alpha == Scene3D.AlphaMode.blend)
+    assert(unlit.unlit)
+}
