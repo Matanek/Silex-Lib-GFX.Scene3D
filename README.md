@@ -18,6 +18,9 @@ Le démonstrateur public `Silex-Examples/Sources/VectorFontShowcase/Main.sx`
 montre un `GlyphRun` converti en géométrie planaire éclairée, avec matériau PBR
 et ombre projetée sur un receiver distinct.
 
-`Silex-Examples/Sources/CanvasProjection3D.sx` distingue une ombre graphique
-Canvas 2D d’un `CanvasPanel` éclairé qui projette une vraie ombre 3D selon son
-alpha.
+`Silex-Examples/Sources/CanvasProjection3D.sx` convertit des formes
+`GFX.Canvas` et du texte `GFX.Font` en triangles planaires avec
+`Meshes.add_canvas_geometry`. La géométrie reste indépendante de la résolution,
+reçoit un matériau PBR et projette sa silhouette — contours de glyphes compris —
+sur un receiver distinct. L’exemple n’emploie ni `CanvasPanel` ni texture
+intermédiaire.
