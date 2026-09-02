@@ -1,4 +1,5 @@
 use GFX.Canvas.TextLayer
+use GFX.Color
 use GFX.Font
 use GFX.Scene3D.Geometry.Mesh as GeometryMesh
 use GFX.Scene3D.Geometry.Vertex
@@ -112,7 +113,8 @@ package class TextCache {
                     run.instance().face().identity(),
                     text.plane,
                     text.tolerance,
-                    false
+                    false,
+                    Color.white()
                 )
             }
         }
@@ -157,7 +159,8 @@ package class TextCache {
                     face_identity,
                     plane,
                     tolerance,
-                    true
+                    true,
+                    layer.color()
                 )
             }
         }
@@ -170,7 +173,8 @@ package class TextCache {
         face_identity:str,
         plane:TextPlane,
         tolerance:float,
-        canvas_y_down:bool
+        canvas_y_down:bool,
+        color:Color
     ) Result<TextBuild, TextError> {
         let normal = plane.x_axis.cross(plane.y_axis).normalized()
         var vertices:Vertex[] = []
@@ -195,12 +199,16 @@ package class TextCache {
                             coordinate(transform.yy) * point.y + coordinate(transform.dy)
                         if canvas_y_down {
                             logical_x += baseline.x
-                            logical_y = -(baseline.y - logical_y)
+                            logical_y = baseline.y - logical_y
                         }
                         let position = plane.origin
                             .add(plane.x_axis.multiply(logical_x))
                             .add(plane.y_axis.multiply(logical_y))
-                        vertices.append(Vertex(position:position, normal:normal))
+                        vertices.append(Vertex(
+                            position:position,
+                            normal:normal,
+                            color:color
+                        ))
                         if let value = minimum { minimum = value.minimum(position) }
                         else { minimum = position }
                         if let value = maximum { maximum = value.maximum(position) }

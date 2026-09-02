@@ -177,10 +177,11 @@ placement, camera, or light. Text at different sizes therefore shares the same
 normalized triangles. `text_cache_stats()` exposes hits, tessellations, and
 placements for tests and profiling.
 
-`add_canvas_text` also accepts a vector-compatible `Canvas.TextLayer` and
-explicitly adapts its Y-down coordinates. A bitmap/color glyph without an
-outline fails before the frame with a `TextError` naming its face, glyph, and
-cluster. `text_bounds(handle)` returns the physical mesh bounds.
+`add_canvas_text` also accepts a vector-compatible `Canvas.TextLayer`,
+preserves its placement and color, and explicitly adapts its Y-down
+coordinates. A bitmap/color glyph without an outline fails before the frame
+with a `TextError` naming its face, glyph, and cluster. `text_bounds(handle)`
+returns the physical mesh bounds.
 
 Text remains a zero-thickness surface: enable `double_sided` when it must be
 visible from both sides. `casts_shadows:false` removes it from the shadow pass.

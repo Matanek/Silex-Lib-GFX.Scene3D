@@ -152,10 +152,11 @@ placement, caméra ou lumière. Deux textes de tailles différentes partagent
 donc les mêmes triangles normalisés. `text_cache_stats()` rend les hits,
 tessellations et placements observables pour les tests et profils.
 
-`add_canvas_text` accepte aussi un `Canvas.TextLayer` vector-compatible et
-applique explicitement son repère Y-down. Un glyphe bitmap/couleur sans contour
-échoue avant la frame avec un `TextError` indiquant la face, le glyphe et son
-cluster. `text_bounds(handle)` retourne les bornes physiques du mesh.
+`add_canvas_text` accepte aussi un `Canvas.TextLayer` vector-compatible,
+préserve sa position et sa couleur, puis applique explicitement son repère
+Y-down. Un glyphe bitmap/couleur sans contour échoue avant la frame avec un
+`TextError` indiquant la face, le glyphe et son cluster. `text_bounds(handle)`
+retourne les bornes physiques du mesh.
 
 Le texte reste une surface sans épaisseur : `double_sided` est recommandé
 quand il doit être visible des deux côtés. `casts_shadows:false` le retire de la

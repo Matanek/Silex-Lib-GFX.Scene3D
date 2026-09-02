@@ -77,7 +77,11 @@ test "convert analytic Canvas silhouettes into physical planar geometry" {
 test "reuse the Scene3D text contour path inside Canvas geometry" {
     var drawing = Canvas.Canvas()
     drawing.paint(func(painter:&Canvas.Painter) {
-        painter.text("BO", Math.Vec2(8.0, 24.0), Canvas.TextStyle(size:18.0))
+        painter.text(
+            "BO",
+            Math.Vec2(8.0, 4.0),
+            Canvas.TextStyle(size:18.0, color:Color.rose_400())
+        )
     })
     var snapshot = drawing.snapshot(64, 32)
     var layers = snapshot.text_layers()
@@ -99,6 +103,8 @@ test "reuse the Scene3D text contour path inside Canvas geometry" {
     let direct_mesh = meshes.snapshot(direct)
     assert(converted_mesh.vertex_count() == direct_mesh.vertex_count())
     assert(converted_mesh.index_count() == direct_mesh.index_count())
+    var minimum_y = 32.0
+    var maximum_y = 0.0
     var index = 0
     while index < converted_mesh.vertex_count() {
         let vertex = converted_mesh.vertices()[index]
@@ -108,10 +114,16 @@ test "reuse the Scene3D text contour path inside Canvas geometry" {
         ))
         let logical_x = (vertex.position.x - 1.0) / 0.1
         let logical_y = (vertex.position.y - 2.0) / 0.2
+        minimum_y = Math.min(minimum_y, logical_y)
+        maximum_y = Math.max(maximum_y, logical_y)
+        assert(vertex.color == Color.rose_400())
+        assert(direct_mesh.vertices()[index].color == Color.rose_400())
         assert(Math.abs(vertex.uv.x - logical_x / 64.0) < 0.0001)
         assert(Math.abs(vertex.uv.y - logical_y / 32.0) < 0.0001)
         index++
     }
+    assert(minimum_y >= 3.0)
+    assert(maximum_y < 28.0)
 }
 
 test "reject raster-only Canvas commands and degenerate mappings explicitly" {
