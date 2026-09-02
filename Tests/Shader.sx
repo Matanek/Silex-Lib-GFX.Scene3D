@@ -4,10 +4,16 @@ test "compile the built-in Scene3D forward shader" {
     let program = GPU.ShaderProgram.hlsl(
         file:"../Shaders/Forward.hlsl"
     )
+    let layout = program.layout()
+    assert(layout.vertex.entry == "vertex_main")
+    assert(layout.fragment.entry == "fragment_main")
 }
 
 test "compile the built-in Scene3D skybox shader" {
     let program = GPU.ShaderProgram.hlsl(
         file:"../Shaders/Skybox.hlsl"
     )
+    let layout = program.layout()
+    assert(layout.vertex.entry == "vertex_main")
+    assert(layout.fragment.entry == "fragment_main")
 }
