@@ -159,9 +159,11 @@ Y-down. Un glyphe bitmap/couleur sans contour échoue avant la frame avec un
 retourne les bornes physiques du mesh.
 
 Le texte reste une surface sans épaisseur : `double_sided` est recommandé
-quand il doit être visible des deux côtés. `casts_shadows:false` le retire de la
-passe d’ombre. Les modes `opaque` et `mask` existants fonctionnent sans texture
-alpha, puisque la silhouette et ses trous sont déjà décrits par les triangles.
+quand il doit être visible ou projeter son ombre depuis les deux côtés. Le même
+état de face est appliqué aux passes de couleur, aux ombres directionnelles et
+aux ombres ponctuelles. `casts_shadows:false` retire le mesh de la passe
+d’ombre. Les modes `opaque` et `mask` existants fonctionnent sans texture alpha,
+puisque la silhouette et ses trous sont déjà décrits par les triangles.
 Extrusion, bevel et parois latérales ne font pas partie de cette version.
 
 ## Panneaux Canvas et géométrie planaire
@@ -217,8 +219,10 @@ sun.shadow_cascade_distances = Math.Vec4(22.0, 31.0, 38.0, 45.0)
 ```
 
 Le renderer choisit D32, puis D24 ou D16. Les ombres utilisent biais de
-profondeur, back-face culling, PCSS et transition chevauchée entre cascades.
-Une douceur nulle sélectionne une comparaison bilinéaire unique.
+profondeur, PCSS et transition chevauchée entre cascades. Le back-face culling
+reste actif pour un matériau simple-face et est désactivé par `double_sided`, y
+compris dans les shadow maps. Une douceur nulle sélectionne une comparaison
+bilinéaire unique.
 
 ## Batching automatique
 

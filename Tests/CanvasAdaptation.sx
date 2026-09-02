@@ -29,6 +29,26 @@ func mapping() Scene3D.PlaneMapping {
     )
 }
 
+func assert_winding_matches_normals(mesh:Scene3D.Geometry.Mesh) {
+    let vertices = mesh.vertices()
+    let indices = mesh.indices()
+    var index = 0
+    var faces = 0
+    while index < indices.count() {
+        let first = vertices[indices[index] as int]
+        let second = vertices[indices[index + 1] as int]
+        let third = vertices[indices[index + 2] as int]
+        let face = second.position.subtract(first.position)
+            .cross(third.position.subtract(first.position))
+        if face.length_squared() > 0.000000000001 {
+            assert(face.dot(first.normal) > 0.0)
+            faces++
+        }
+        index += 3
+    }
+    assert(faces > 0)
+}
+
 test "convert analytic Canvas silhouettes into physical planar geometry" {
     var drawing = Canvas.Canvas()
     drawing.paint(func(painter:&Canvas.Painter) {
@@ -72,6 +92,7 @@ test "convert analytic Canvas silhouettes into physical planar geometry" {
     assert(minimum.x < maximum.x)
     assert(minimum.y < maximum.y)
     assert(minimum.z == maximum.z)
+    assert_winding_matches_normals(mesh)
 }
 
 test "reuse the Scene3D text contour path inside Canvas geometry" {
@@ -124,6 +145,8 @@ test "reuse the Scene3D text contour path inside Canvas geometry" {
     }
     assert(minimum_y >= 3.0)
     assert(maximum_y < 28.0)
+    assert_winding_matches_normals(converted_mesh)
+    assert_winding_matches_normals(direct_mesh)
 }
 
 test "reject raster-only Canvas commands and degenerate mappings explicitly" {

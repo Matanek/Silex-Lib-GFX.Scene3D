@@ -1,0 +1,7 @@
+use GFX.GPU
+use GFX.Scene3D.Renderer.shadow_cull
+
+test "honor material sidedness in directional and point shadow pipelines" {
+    assert(shadow_cull(false) == GPU.Cull.back)
+    assert(shadow_cull(true) == GPU.Cull.none)
+}

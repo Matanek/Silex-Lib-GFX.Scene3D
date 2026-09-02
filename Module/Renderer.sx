@@ -93,9 +93,13 @@ package class Renderer {
     private var panel_transparent_pipeline:GPU.GraphicsPipeline? = null
     private var panel_transparent_double_sided_pipeline:GPU.GraphicsPipeline? = null
     private var shadow_pipeline:GPU.GraphicsPipeline? = null
+    private var double_sided_shadow_pipeline:GPU.GraphicsPipeline? = null
     private var point_shadow_pipeline:GPU.GraphicsPipeline? = null
+    private var double_sided_point_shadow_pipeline:GPU.GraphicsPipeline? = null
     private var panel_shadow_pipeline:GPU.GraphicsPipeline? = null
+    private var panel_double_sided_shadow_pipeline:GPU.GraphicsPipeline? = null
     private var panel_point_shadow_pipeline:GPU.GraphicsPipeline? = null
+    private var panel_double_sided_point_shadow_pipeline:GPU.GraphicsPipeline? = null
     private var gizmo_pipeline:GPU.GraphicsPipeline? = null
     private var grid_pipeline:GPU.GraphicsPipeline? = null
     private var skybox_pipeline:GPU.GraphicsPipeline? = null
@@ -188,16 +192,28 @@ package class Renderer {
             device, surface, true, true, samples, true
         )
         self.shadow_pipeline = shadow_pipeline(
-            device, false, self.shadow_depth_format
+            device, false, false, self.shadow_depth_format
+        )
+        self.double_sided_shadow_pipeline = shadow_pipeline(
+            device, false, true, self.shadow_depth_format
         )
         self.point_shadow_pipeline = shadow_pipeline(
-            device, true, self.shadow_depth_format
+            device, true, false, self.shadow_depth_format
+        )
+        self.double_sided_point_shadow_pipeline = shadow_pipeline(
+            device, true, true, self.shadow_depth_format
         )
         self.panel_shadow_pipeline = canvas_panel_shadow_pipeline(
-            device, false, self.shadow_depth_format
+            device, false, false, self.shadow_depth_format
+        )
+        self.panel_double_sided_shadow_pipeline = canvas_panel_shadow_pipeline(
+            device, false, true, self.shadow_depth_format
         )
         self.panel_point_shadow_pipeline = canvas_panel_shadow_pipeline(
-            device, true, self.shadow_depth_format
+            device, true, false, self.shadow_depth_format
+        )
+        self.panel_double_sided_point_shadow_pipeline = canvas_panel_shadow_pipeline(
+            device, true, true, self.shadow_depth_format
         )
         self.gizmo_pipeline = gizmo_pipeline(device, surface, samples)
         self.skybox_pipeline = skybox_pipeline(device, surface, samples)
@@ -986,82 +1002,74 @@ package class Renderer {
                         continue
                     }
                     var source = self.draws[batch.draw_index]
-                    if panel_mask {
-                        if face.point {
-                            if let pipeline = self.panel_point_shadow_pipeline {
-                                pass.bind(pipeline)
-                            }
-                        } else {
-                            if let pipeline = self.panel_shadow_pipeline {
-                                pass.bind(pipeline)
+                    if let pipeline = self.shadow_pipeline_for(
+                        batch.settings, face.point, panel_mask
+                    ) {
+                        pass.bind(pipeline)
+                        if panel_mask {
+                            self.bind_panel_surface(pass, source.panel_surface)
+                            var cutoff = Packing.vector(Math.Vec4(
+                                batch.settings.alpha_cutoff, 0.0, 0.0, 0.0
+                            ))
+                            if face.point {
+                                pass.fragment_uniform(1, cutoff, 16)
+                            } else {
+                                pass.fragment_uniform(0, cutoff, 16)
                             }
                         }
-                        self.bind_panel_surface(pass, source.panel_surface)
-                        var cutoff = Packing.vector(Math.Vec4(
-                            batch.settings.alpha_cutoff, 0.0, 0.0, 0.0
-                        ))
-                        if face.point {
-                            pass.fragment_uniform(1, cutoff, 16)
-                        } else {
-                            pass.fragment_uniform(0, cutoff, 16)
-                        }
-                    } elif face.point {
-                        if let pipeline = self.point_shadow_pipeline { pass.bind(pipeline) }
-                    } else {
-                        if let pipeline = self.shadow_pipeline { pass.bind(pipeline) }
-                    }
-                    var cache = self.meshes[batch.cache]
-                    if let vertices = cache.vertices {
-                        if let indices = cache.indices {
-                            if let instances = batch.instances {
-                                pass.vertex_buffer(0, vertices)
-                                pass.index_buffer(indices, GPU.IndexType.thirty_two_bits)
-                                if !face.point && batch.active_chunks > 0 {
-                                    var chunk_index = 0
-                                    while chunk_index < batch.active_chunks {
-                                        var chunk = batch.chunks[chunk_index]
-                                        if self.shadow_bounds_relevant(
-                                            batch.settings,
-                                            chunk.center,
-                                            chunk.radius,
-                                            face.split_near,
-                                            face.split_far
-                                        ) && bounds_in_frustum(
-                                            chunk.center,
-                                            chunk.radius,
-                                            face.view_projection
-                                        ) {
-                                            if let chunk_instances = chunk.instances {
-                                                pass.vertex_buffer(1, chunk_instances)
-                                            pass.draw_indexed(
-                                                cache.index_count,
-                                                chunk.models.count()
-                                            )
-                                            if batch.settings.canvas_panel {
-                                                panel_shadow_passes++
+                        var cache = self.meshes[batch.cache]
+                        if let vertices = cache.vertices {
+                            if let indices = cache.indices {
+                                if let instances = batch.instances {
+                                    pass.vertex_buffer(0, vertices)
+                                    pass.index_buffer(indices, GPU.IndexType.thirty_two_bits)
+                                    if !face.point && batch.active_chunks > 0 {
+                                        var chunk_index = 0
+                                        while chunk_index < batch.active_chunks {
+                                            var chunk = batch.chunks[chunk_index]
+                                            if self.shadow_bounds_relevant(
+                                                batch.settings,
+                                                chunk.center,
+                                                chunk.radius,
+                                                face.split_near,
+                                                face.split_far
+                                            ) && bounds_in_frustum(
+                                                chunk.center,
+                                                chunk.radius,
+                                                face.view_projection
+                                            ) {
+                                                if let chunk_instances = chunk.instances {
+                                                    pass.vertex_buffer(1, chunk_instances)
+                                                    pass.draw_indexed(
+                                                        cache.index_count,
+                                                        chunk.models.count()
+                                                    )
+                                                    if batch.settings.canvas_panel {
+                                                        panel_shadow_passes++
+                                                    }
+                                                }
                                             }
-                                            }
+                                            chunk_index++
                                         }
-                                        chunk_index++
-                                    }
-                                } else if face.point || self.shadow_bounds_relevant(
-                                    batch.settings,
-                                    batch.center,
-                                    batch.radius,
-                                    face.split_near,
-                                    face.split_far
-                                ) && bounds_in_frustum(
-                                    batch.center,
-                                    batch.radius,
-                                    face.view_projection
-                                ) {
-                                    pass.vertex_buffer(1, instances)
-                                    pass.draw_indexed(
-                                        cache.index_count,
-                                        batch.models.count()
-                                    )
-                                    if batch.settings.canvas_panel {
-                                        panel_shadow_passes++
+                                    } else if face.point || self.shadow_bounds_relevant(
+                                        batch.settings,
+                                        batch.center,
+                                        batch.radius,
+                                        face.split_near,
+                                        face.split_far
+                                    ) && bounds_in_frustum(
+                                        batch.center,
+                                        batch.radius,
+                                        face.view_projection
+                                    ) {
+                                        pass.vertex_buffer(1, instances)
+                                        pass.draw_indexed(
+                                            cache.index_count,
+                                            batch.models.count()
+                                        )
+                                        if batch.settings.canvas_panel {
+                                            panel_shadow_passes++
+                                        }
                                     }
                                 }
                             }
@@ -1156,6 +1164,33 @@ package class Renderer {
         }
         if settings.double_sided { return self.double_sided_pipeline }
         return self.pipeline
+    }
+
+    private func shadow_pipeline_for(
+        settings:DrawSettings,
+        point:bool,
+        panel_mask:bool
+    ) GPU.GraphicsPipeline? {
+        if panel_mask {
+            if point {
+                if settings.double_sided {
+                    return self.panel_double_sided_point_shadow_pipeline
+                }
+                return self.panel_point_shadow_pipeline
+            }
+            if settings.double_sided {
+                return self.panel_double_sided_shadow_pipeline
+            }
+            return self.panel_shadow_pipeline
+        }
+        if point {
+            if settings.double_sided {
+                return self.double_sided_point_shadow_pipeline
+            }
+            return self.point_shadow_pipeline
+        }
+        if settings.double_sided { return self.double_sided_shadow_pipeline }
+        return self.shadow_pipeline
     }
 
     private func bind_material_textures(pass:@GPU.RenderPass, textures:MaterialTextures) {
@@ -1498,6 +1533,7 @@ local func forward_pipeline(
 local func canvas_panel_shadow_pipeline(
     device:@GPU.Device,
     point:bool,
+    double_sided:bool,
     depth_format:GPU.TextureFormat
 ) GPU.GraphicsPipeline {
     var shader = GPU.ShaderProgram.hlsl(file:"../Shaders/CanvasPanelShadow.hlsl")
@@ -1506,11 +1542,12 @@ local func canvas_panel_shadow_pipeline(
         shader = GPU.ShaderProgram.hlsl(file:"../Shaders/CanvasPanelPointShadow.hlsl")
         name = "GFX.Scene3D alpha-masked Canvas panel point shadows"
     }
+    if double_sided { name = name + " double-sided" }
     return device.graphics_pipeline(shader, GPU.GraphicsPipelineSettings(
         vertex_buffers:mesh_buffers(),
         attributes:mesh_attributes(),
         rasterizer:GPU.RasterizerState(
-            cull:GPU.Cull.back,
+            cull:shadow_cull(double_sided),
             depth_bias:2.0,
             depth_bias_slope:3.0,
             bias_depth:true
@@ -1528,6 +1565,7 @@ local func canvas_panel_shadow_pipeline(
 local func shadow_pipeline(
     device:@GPU.Device,
     point:bool,
+    double_sided:bool,
     depth_format:GPU.TextureFormat
 ) GPU.GraphicsPipeline {
     var shader = GPU.ShaderProgram.hlsl(file:"../Shaders/Shadow.hlsl")
@@ -1536,11 +1574,12 @@ local func shadow_pipeline(
         shader = GPU.ShaderProgram.hlsl(file:"../Shaders/PointShadow.hlsl")
         name = "GFX.Scene3D point shadows"
     }
+    if double_sided { name = name + " double-sided" }
     return device.graphics_pipeline(shader, GPU.GraphicsPipelineSettings(
         vertex_buffers:mesh_buffers(),
         attributes:mesh_attributes(),
         rasterizer:GPU.RasterizerState(
-            cull:GPU.Cull.back,
+            cull:shadow_cull(double_sided),
             depth_bias:2.0,
             depth_bias_slope:3.0,
             bias_depth:true
@@ -1553,6 +1592,11 @@ local func shadow_pipeline(
         depth_stencil_format:depth_format,
         name:name
     ))
+}
+
+package func shadow_cull(double_sided:bool) GPU.Cull {
+    if double_sided { return GPU.Cull.none }
+    return GPU.Cull.back
 }
 
 local func best_shadow_depth_format(device:@GPU.Device) GPU.TextureFormat {

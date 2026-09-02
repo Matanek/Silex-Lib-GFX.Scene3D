@@ -184,10 +184,12 @@ with a `TextError` naming its face, glyph, and cluster. `text_bounds(handle)`
 returns the physical mesh bounds.
 
 Text remains a zero-thickness surface: enable `double_sided` when it must be
-visible from both sides. `casts_shadows:false` removes it from the shadow pass.
-The existing `opaque` and `mask` modes work without an alpha texture because
-the triangles already describe the silhouette and its holes. Extrusion,
-bevels, and side walls are outside this version.
+visible or cast its shadow from both sides. The same face state applies to the
+color, directional-shadow, and point-shadow passes. `casts_shadows:false`
+removes the mesh from the shadow pass. The existing `opaque` and `mask` modes
+work without an alpha texture because the triangles already describe the
+silhouette and its holes. Extrusion, bevels, and side walls are outside this
+version.
 
 ## Canvas panels and planar geometry
 
@@ -258,8 +260,9 @@ sun.shadow_cascade_distances = Math.Vec4(22.0, 31.0, 38.0, 45.0)
 ```
 
 The renderer selects a sampled D32 shadow format when available, then falls
-back to D24 or D16. Shadow casters use slope-aware raster depth bias and
-back-face culling to prevent self-shadowing patterns before filtering. Four sun
+back to D24 or D16. Shadow casters use slope-aware raster depth bias before
+filtering. Back-face culling remains enabled for single-sided materials, while
+`double_sided` disables it in shadow maps too. Four sun
 cascades occupy an 8192 atlas, preserving 4096x4096 effective texels per
 cascade. This matches the spatial shadow resolution used by the historical
 WorldDemo instead of enlarging a 2048-tile edge with filtering.
