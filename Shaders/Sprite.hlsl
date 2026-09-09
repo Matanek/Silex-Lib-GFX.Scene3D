@@ -1,16 +1,16 @@
 struct VertexInput {
     float2 position : TEXCOORD0;
     float2 uv : TEXCOORD1;
+    float4 center : TEXCOORD2;
+    float4 right : TEXCOORD3;
+    float4 up : TEXCOORD4;
+    float4 sizePivot : TEXCOORD5;
+    float4 tint : TEXCOORD6;
+    float4 uvRegion : TEXCOORD7;
 };
 
 cbuffer DrawUniforms : register(b0, space1) {
-    float4x4 model;
-    float4x4 view;
-    float4x4 projection;
-    float4 sizePivot;
-    float4 tint;
-    float4 settings;
-    float4 uvRegion;
+    float4x4 viewProjection;
 };
 
 Texture2D<float4> spriteTexture : register(t0, space2);
@@ -24,24 +24,13 @@ struct VertexOutput {
 
 VertexOutput vertex_main(VertexInput input) {
     VertexOutput output;
-    const float2 local2D = (input.position - sizePivot.zw) * sizePivot.xy;
-    float3 worldPosition;
-    if (settings.y < 0.5) {
-        worldPosition = mul(model, float4(local2D, settings.x, 1.0)).xyz;
-    } else {
-        const float3 center = mul(model, float4(0.0, 0.0, 0.0, 1.0)).xyz;
-        float3 right = normalize(float3(view[0][0], view[0][1], view[0][2]));
-        float3 up = normalize(float3(view[1][0], view[1][1], view[1][2]));
-        if (settings.y > 1.5) {
-            right.y = 0.0;
-            right = normalize(right);
-            up = float3(0.0, 1.0, 0.0);
-        }
-        worldPosition = center + right * local2D.x + up * local2D.y;
-    }
-    output.position = mul(projection, mul(view, float4(worldPosition, 1.0)));
-    output.uv = uvRegion.xy + input.uv * uvRegion.zw;
-    output.color = tint;
+    const float2 local = (input.position - input.sizePivot.zw) *
+        input.sizePivot.xy;
+    const float3 world = input.center.xyz +
+        input.right.xyz * local.x + input.up.xyz * local.y;
+    output.position = mul(viewProjection, float4(world, 1.0));
+    output.uv = input.uvRegion.xy + input.uv * input.uvRegion.zw;
+    output.color = input.tint;
     return output;
 }
 

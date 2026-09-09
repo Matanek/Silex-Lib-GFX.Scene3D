@@ -1,7 +1,7 @@
 # GFX.Scene3D
 
 `GFX.Scene3D` provides retained 3D scenes with geometry, PBR materials,
-lighting, cameras, shadows, and GPU rendering.
+sprites and billboards, lighting, cameras, shadows, and GPU rendering.
 
 ```text
 silex install GFX.Scene3D

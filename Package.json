@@ -2,8 +2,8 @@
   "name": "GFX.Scene3D",
   "version": "0.3.0",
   "description": {
-    "en": "Retained 3D scenes with geometry, materials, lighting, cameras, and GPU rendering.",
-    "fr": "Scènes 3D retenues avec géométrie, matériaux, éclairage, caméras et rendu GPU."
+    "en": "Retained 3D scenes with geometry, materials, sprites, lighting, cameras, and GPU rendering.",
+    "fr": "Scènes 3D retenues avec géométrie, matériaux, sprites, éclairage, caméras et rendu GPU."
   },
   "authors": ["Matanek"],
   "requires": { "silex": ">=0.44.0" },

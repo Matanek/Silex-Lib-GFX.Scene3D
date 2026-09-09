@@ -1,0 +1,109 @@
+use GFX.Application
+use GFX.Assets.Image
+use GFX.Color
+use GFX.ECS
+use GFX.Rendering
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+func create_camera(world:&ECS.World) {
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.0, 5.0)))
+        ..with(Scene3D.Camera())
+    )
+}
+
+func create_billboard_batch(world:&ECS.World, images:&Image.Store) {
+    create_camera(world)
+    let image = images.add(Image.solid(Color.white()))
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(-1.0, 0.0, 0.0)))
+        ..with(Scene3D.Sprite(
+            image:image,
+            billboard:Scene3D.Billboard.none
+        ))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform())
+        ..with(Scene3D.Sprite(
+            image:image,
+            billboard:Scene3D.Billboard.face_camera
+        ))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(1.0, 0.0, 0.0)))
+        ..with(Scene3D.Sprite(
+            image:image,
+            billboard:Scene3D.Billboard.face_camera_y
+        ))
+    )
+}
+
+func create_sampler_split(world:&ECS.World, images:&Image.Store) {
+    create_camera(world)
+    let image = images.add(Image.solid(Color.white()))
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(-1.0, 0.0, 0.0)))
+        ..with(Scene3D.Sprite(image:image))
+    )
+    var pixelated = Scene3D.Sprite(image:image)
+    pixelated.sampling(Scene3D.Sampling.pixelated)
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(1.0, 0.0, 0.0)))
+        ..with(pixelated)
+    )
+}
+
+func require_billboard_batch(
+    renderer:@Rendering.Renderer,
+    controller:&Application.Controller
+) {
+    assert(renderer.stats().draw_calls() == 1)
+    assert(renderer.stats().instances() == 3)
+    controller.stop()
+}
+
+func require_sampler_split(
+    renderer:@Rendering.Renderer,
+    controller:&Application.Controller
+) {
+    assert(renderer.stats().draw_calls() == 2)
+    assert(renderer.stats().instances() == 2)
+    controller.stop()
+}
+
+func sprite_application(title:str) Application {
+    var application = Application()
+    application.add_plugin(WindowPlugin(WindowPlugin.Settings()
+        ..title = title
+        ..width = 64
+        ..height = 64
+        ..hidden = true
+    ))
+    application.add_plugin(Rendering.Plugin(Rendering.Plugin.Settings()
+        ..clear = Color.black()
+    ))
+    application.add_plugin(Scene3D.Plugin())
+    return application
+}
+
+test "render every Sprite3D billboard mode in one compatible batch" {
+    var application = sprite_application("Scene3D sprite billboards")
+    application.add_system(Application.Schedule.startup, create_billboard_batch)
+    application.add_after_system(
+        Application.Schedule.render,
+        require_billboard_batch
+    )
+    assert(application.run() == 0)
+}
+
+test "split Sprite3D batches when their samplers differ" {
+    var application = sprite_application("Scene3D sprite sampler batches")
+    application.add_system(Application.Schedule.startup, create_sampler_split)
+    application.add_after_system(
+        Application.Schedule.render,
+        require_sampler_split
+    )
+    assert(application.run() == 0)
+}

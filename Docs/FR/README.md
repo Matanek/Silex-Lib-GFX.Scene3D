@@ -96,6 +96,31 @@ Le renderer gère textures de couleur, normale, metallic-roughness, occlusion et
 profondeur. Le sampler par défaut répète, filtre linéairement, génère les
 mipmaps et utilise l’anisotropie.
 
+## Sprites et billboards
+
+`Sprite` rend une image sur un quad 3D sans passer par un mesh ou un matériau
+PBR. `Billboard.none` suit la rotation du `Transform`, `face_camera` fait face
+à la caméra complète et `face_camera_y` conserve l’axe vertical du monde.
+
+```silex
+let image = images.add(Image.solid(Color.white()))
+world.spawn(ECS.EntityRecipe()
+    ..with(Scene3D.Transform(position:Math.Vec3(0.0, 1.0, 0.0)))
+    ..with(Scene3D.Sprite(
+        image:image,
+        size:Math.Vec2(2.0),
+        billboard:Scene3D.Billboard.face_camera
+    ))
+)
+```
+
+Les sprites et les meshes transparents partagent un tri loin-vers-près. Les
+sprites adjacents qui utilisent la même image et le même sampler sont envoyés
+en un draw instancié, même si leurs modes de billboard diffèrent. Le pipeline
+teste la profondeur des surfaces opaques mais n’écrit pas dans le depth
+buffer. `region(...)`, `sampling(...)`, `pivot`, `size` et `color` restent des
+propriétés propres à chaque instance.
+
 ## Modèles importés
 
 `GFX.Assets.Model` reste une valeur décodée portable. `Scene3D.instantiate` est

@@ -118,6 +118,30 @@ writes. Texture transforms carry offset, scale, and rotation. The default
 sampler repeats, filters linearly, generates mipmaps, and uses anisotropic
 filtering.
 
+## Sprites and billboards
+
+`Sprite` renders an image on a 3D quad without a mesh or PBR material.
+`Billboard.none` follows the `Transform` rotation, `face_camera` faces the full
+camera pose, and `face_camera_y` preserves the world's vertical axis.
+
+```silex
+let image = images.add(Image.solid(Color.white()))
+world.spawn(ECS.EntityRecipe()
+    ..with(Scene3D.Transform(position:Math.Vec3(0.0, 1.0, 0.0)))
+    ..with(Scene3D.Sprite(
+        image:image,
+        size:Math.Vec2(2.0),
+        billboard:Scene3D.Billboard.face_camera
+    ))
+)
+```
+
+Sprites and transparent meshes share one far-to-near ordering. Adjacent
+sprites using the same image and sampler are submitted as one instanced draw,
+even when their billboard modes differ. The pipeline tests against opaque
+depth but does not write depth. `region(...)`, `sampling(...)`, `pivot`,
+`size`, and `color` remain per-instance properties.
+
 ## Imported models
 
 `GFX.Assets.Model` remains a portable decoded value. `Scene3D.instantiate` is the

@@ -73,6 +73,60 @@ func instances(values:@Math.Mat4[]) str {
     return bytes
 }
 
+func sprite_storage(count:int) str { return storage(count * 96) }
+
+func write_sprite_instance(
+    bytes:&str,
+    index:int,
+    center:Math.Vec3,
+    right:Math.Vec3,
+    up:Math.Vec3,
+    size:Math.Vec2,
+    pivot:Math.Vec2,
+    color:Color,
+    region:Math.Vec4
+) {
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    let offset = index * 96
+    write_vec4(address, offset, Math.Vec4(center, 1.0))
+    write_vec4(address, offset + 16, Math.Vec4(right, 0.0))
+    write_vec4(address, offset + 32, Math.Vec4(up, 0.0))
+    write_vec4(address, offset + 48, Math.Vec4(
+        size.x,
+        size.y,
+        pivot.x,
+        pivot.y
+    ))
+    write_color(address, offset + 64, color)
+    write_vec4(address, offset + 80, region)
+}
+
+func sprite_quad_vertices() str {
+    var bytes = storage(64)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    write_vec2(address, 0, Math.Vec2(0.0, 0.0))
+    write_vec2(address, 8, Math.Vec2(0.0, 0.0))
+    write_vec2(address, 16, Math.Vec2(1.0, 0.0))
+    write_vec2(address, 24, Math.Vec2(1.0, 0.0))
+    write_vec2(address, 32, Math.Vec2(1.0, 1.0))
+    write_vec2(address, 40, Math.Vec2(1.0, 1.0))
+    write_vec2(address, 48, Math.Vec2(0.0, 1.0))
+    write_vec2(address, 56, Math.Vec2(0.0, 1.0))
+    return bytes
+}
+
+func sprite_quad_indices() str {
+    var bytes = storage(24)
+    let address = C.address_bits(C.mutable_string_pointer(bytes))
+    let values:uint32[] = [0, 1, 2, 0, 2, 3]
+    var index = 0
+    while index < values.count() {
+        let stored = C.store<uint32>(address, (index * 4) as uint, values[index])
+        index++
+    }
+    return bytes
+}
+
 func matrix(value:Math.Mat4) str {
     var bytes = storage(64)
     let address = C.address_bits(C.mutable_string_pointer(bytes))

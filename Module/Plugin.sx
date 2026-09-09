@@ -12,6 +12,7 @@ use GFX.Scene3D.Meshes
 use GFX.Scene3D.Mesh
 use GFX.Scene3D.Renderer
 use GFX.Scene3D.Skybox.Skybox
+use GFX.Scene3D.Sprite
 use GFX.Scene3D.ToneMapping
 use GFX.Scene3D.Transform
 use GFX.Window
@@ -86,6 +87,7 @@ func prepare_scene(
     world:@ECS.World,
     query:ECS.Query<(ECS.Entity, @Transform, @Mesh)>,
     panel_query:ECS.Query<(ECS.Entity, @Transform, @CanvasPanel)>,
+    sprite_query:ECS.Query<(@Transform, @Sprite)>,
     meshes:@Meshes,
     images:@Image.Store,
     renderer:&Renderer,
@@ -97,6 +99,9 @@ func prepare_scene(
     }
     for (entity, transform, panel) in panel_query {
         renderer.collect_panel(world, entity, transform, panel, panels)
+    }
+    for (transform, sprite) in sprite_query {
+        renderer.collect_sprite(transform, sprite, images)
     }
     renderer.finish_prepare(device, meshes, images, panels)
 }
