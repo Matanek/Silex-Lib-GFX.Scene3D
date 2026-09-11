@@ -1,0 +1,43 @@
+use GFX.Application
+use GFX.Application.Schedule
+use GFX.Plugins
+use GFX.Resources
+
+func inspect_grid_frame(
+    renderer:@Resources.Renderer,
+    controller:&Application.Controller
+) {
+    assert(renderer.stats().frames() == 1)
+    assert(renderer.stats().render_passes() >= 1)
+    controller.stop()
+}
+
+test "run Grid3D with only its automatically installed plugins" {
+    var application = Application()
+        ..add_plugin(Plugins.Grid3D())
+        ..add_after_system(Schedule.render, inspect_grid_frame)
+
+    assert(application.run() == 0)
+    assert(application.has_plugin("GFX.Scene3D.Plugin"))
+    assert(application.has_plugin("GFX.ECS.Plugin"))
+    assert(application.has_plugin("GFX.Rendering.Plugin"))
+    assert(application.has_plugin("GFX.GPU.Plugin"))
+    assert(application.has_plugin("GFX.Window.Plugin"))
+    assert(application.has_plugin("GFX.Input.Plugin"))
+}
+
+func inspect_visible_grid(
+    renderer:@Resources.Renderer,
+    controller:&Application.Controller
+) {
+    assert(renderer.stats().draw_calls() >= 1)
+    controller.stop()
+}
+
+test "draw Grid3D with a viewport camera and automatic rendering dependencies" {
+    var application = Application()
+        ..add_plugin(Plugins.Grid3D())
+        ..add_plugin(Plugins.ViewportCamera3D())
+        ..add_after_system(Schedule.render, inspect_visible_grid)
+    assert(application.run() == 0)
+}

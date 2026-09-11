@@ -35,7 +35,7 @@ package func build_canvas_geometry(
     frame:Rect,
     mapping:PlaneMapping,
     tolerance:float,
-    text_cache:@TextCache
+    text_cache:&TextCache
 ) Result<GeometryMesh, CanvasGeometryError> {
     match validate_conversion(frame, mapping, tolerance) {
         failure(error) => {

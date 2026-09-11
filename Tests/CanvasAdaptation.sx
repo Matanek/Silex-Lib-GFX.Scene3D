@@ -112,6 +112,9 @@ test "reuse the Scene3D text contour path inside Canvas geometry" {
         Canvas.Rect(Math.Vec2(), Math.Vec2(64.0, 32.0)),
         mapping()
     ))
+    let converted_stats = meshes.text_cache_stats()
+    assert(converted_stats.text_builds == 1)
+    assert(converted_stats.tessellations > 0)
     let direct = required_canvas_text(meshes.add_canvas_text(
         layers[0],
         Scene3D.TextPlane(
@@ -120,6 +123,10 @@ test "reuse the Scene3D text contour path inside Canvas geometry" {
             y_axis:mapping().y_axis
         )
     ))
+    let reused_stats = meshes.text_cache_stats()
+    assert(reused_stats.text_builds == 2)
+    assert(reused_stats.tessellations == converted_stats.tessellations)
+    assert(reused_stats.cache_hits > converted_stats.cache_hits)
     let converted_mesh = meshes.snapshot(converted)
     let direct_mesh = meshes.snapshot(direct)
     assert(converted_mesh.vertex_count() == direct_mesh.vertex_count())
