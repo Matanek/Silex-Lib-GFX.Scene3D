@@ -1,0 +1,104 @@
+use GFX.Application
+use GFX.Color
+use GFX.ECS
+use GFX.GPU
+use GFX.Rendering
+use GFX.Scene3D
+use GFX.Scene3D.Renderer.Renderer
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+func create_contact_scene(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    // Magnify the contact at x = 0.5 without changing the shadow-map resolution.
+    let camera = Scene3D.Camera(near_plane:0.1, far_plane:10.0, vertical_fov:0.026665)
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(
+            position:Math.Vec3(0.52, 3.0, 0.0),
+            rotation:Math.Quat.angle_axis(Math.radians(-90.0), Math.Vec3.right())
+        ))
+        ..with(camera)
+    )
+    let cube = meshes.add(Scene3D.Geometry.Cube.make())
+    let floor = meshes.add(Scene3D.Geometry.Plane.make(Math.Vec2(8.0)))
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.5, 0.0)))
+        ..with(Scene3D.Mesh(cube))
+        ..with(Scene3D.Material())
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(rotation:Math.Quat.angle_axis(
+            Math.radians(-90.0), Math.Vec3.right()
+        )))
+        ..with(Scene3D.Mesh(floor))
+        ..with(Scene3D.Material())
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(-2.0, 4.0, 0.0)))
+        ..with(Scene3D.PointLight(radius:8.0, intensity:4.0))
+    )
+}
+
+func inspect_contact(
+    device:@GPU.Device,
+    surface:@GPU.Surface,
+    renderer:@Renderer,
+    controller:&Application.Controller
+) {
+    var color = device.texture(GPU.TextureSettings(
+        format:surface.format(), width:128, height:128,
+        usage:GPU.TextureUsage(color_target:true)
+    ))
+    var depth = device.texture(GPU.TextureSettings(
+        format:GPU.TextureFormat.depth16, width:128, height:128,
+        usage:GPU.TextureUsage(depth_stencil_target:true)
+    ))
+    var download = device.download_buffer(128 * 128 * 4)
+    var commands = device.commands()
+    var colors:GPU.ColorTarget[] = [GPU.ColorTarget(texture:color, clear:Color.black())]
+    var pass = commands.render(colors, GPU.DepthTarget(texture:depth))
+    pass.viewport(0.0, 0.0, 128.0, 128.0)
+    pass.scissor(0, 0, 128, 128)
+    renderer.draw(pass)
+    pass.finish()
+    var transfer = commands.copy()
+    transfer.download(GPU.TextureRegion(texture:color, width:128, height:128), download, 128, 128)
+    transfer.finish()
+    var completed = commands.submit_and_track()
+    completed.wait()
+    let pixels = download.read()
+    assert(renderer.active_batch_count() == 2)
+    // The cube top must be lit, so an empty or entirely dark render cannot pass.
+    assert(pixels[(64 * 128 + 8) * 4] > 200 as uint8)
+    let shadow = pixels[(64 * 128 + 96) * 4] as int
+    assert(shadow > 20 && shadow < 120)
+    // These floor pixels are immediately outside the cube, within its shadow.
+    // Reversed caster winding formerly lit the first three (214, 191, 129),
+    // while the rest of the shadow measured 79 on Metal.
+    var y = 16
+    while y < 112 {
+        var x = 32
+        while x < 64 {
+            let value = pixels[(y * 128 + x) * 4] as int
+            assert(Math.abs(value - shadow) <= 3)
+            x++
+        }
+        y++
+    }
+    controller.stop()
+}
+
+test "keep point shadows attached to a cube resting on a plane" {
+    var application = Application()
+    application.add_plugin(WindowPlugin(WindowPlugin.Settings()
+        ..width = 128
+        ..height = 128
+        ..hidden = true
+    ))
+    application.add_plugin(Rendering.Plugin(Rendering.Plugin.Settings(
+        antialiasing:Rendering.Antialiasing.none, presentation:false
+    )))
+    application.add_plugin(Scene3D.Plugin())
+    application.add_system(Application.Schedule.startup, create_contact_scene)
+    application.add_after_system(Application.Schedule.render, inspect_contact)
+    assert(application.run() == 0)
+}

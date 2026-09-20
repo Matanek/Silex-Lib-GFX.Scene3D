@@ -1926,6 +1926,7 @@ local func canvas_panel_shadow_pipeline(
         attributes:mesh_attributes(),
         rasterizer:GPU.RasterizerState(
             cull:shadow_cull(double_sided),
+            front_face:shadow_front_face(point),
             depth_bias:2.0,
             depth_bias_slope:3.0,
             bias_depth:true
@@ -1958,6 +1959,7 @@ local func shadow_pipeline(
         attributes:mesh_attributes(),
         rasterizer:GPU.RasterizerState(
             cull:shadow_cull(double_sided),
+            front_face:shadow_front_face(point),
             depth_bias:2.0,
             depth_bias_slope:3.0,
             bias_depth:true
@@ -1975,6 +1977,12 @@ local func shadow_pipeline(
 package func shadow_cull(double_sided:bool) GPU.Cull {
     if double_sided { return GPU.Cull.none }
     return GPU.Cull.back
+}
+
+package func shadow_front_face(point:bool) GPU.FrontFace {
+    // Cubemap projections reverse Y to match atlas sampling, reversing winding.
+    if point { return GPU.FrontFace.clockwise }
+    return GPU.FrontFace.counter_clockwise
 }
 
 local func best_shadow_depth_format(device:@GPU.Device) GPU.TextureFormat {
