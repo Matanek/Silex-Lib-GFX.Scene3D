@@ -426,15 +426,6 @@ float poisson_pcf_shadow(
     return visibility * (1.0 / 16.0);
 }
 
-float pcf_shadow(float2 uv, float4 rect, float receiverDepth, float texel, float softness) {
-    if (softness <= 0.0001) {
-        return atlas_shadow_compare(uv, rect, texel, receiverDepth);
-    }
-    return poisson_pcf_shadow(
-        uv, rect, receiverDepth, texel, texel * (0.75 + softness * 1.5)
-    );
-}
-
 float pcss_shadow(
     float2 uv,
     float4 rect,
@@ -490,21 +481,87 @@ float pcss_shadow(
     );
 }
 
+// Invert the face projection at the actual shadow texel center. Point maps
+// store radial depth, which varies across even a perfectly planar receiver.
+float3 point_shadow_ray(float2 uv, int face) {
+    const float2 p = (uv * 2.0 - 1.0) / 0.9826972631;
+    if (face == 0) return float3(1.0, -p.y, -p.x);
+    if (face == 1) return float3(-1.0, -p.y, p.x);
+    if (face == 2) return float3(p.x, 1.0, p.y);
+    if (face == 3) return float3(p.x, -1.0, -p.y);
+    if (face == 4) return float3(p.x, -p.y, 1.0);
+    return float3(-p.x, -p.y, -1.0);
+}
+
+float point_shadow_compare(
+    float2 uv,
+    int face,
+    float4 rect,
+    float4 receiverPlane,
+    float bias
+) {
+    uint width;
+    uint height;
+    shadowAtlas.GetDimensions(width, height);
+    const float2 dimensions = float2(width, height);
+    const int2 firstPixel = int2(rect.zw * dimensions);
+    const int2 tileSize = int2(rect.xy * dimensions);
+    const int2 lastPixel = firstPixel + tileSize - 1;
+    const float2 position = uv * float2(tileSize) + float2(firstPixel) - 0.5;
+    const int2 base = int2(floor(position));
+    const float2 fraction = frac(position);
+    float visibility = 0.0;
+    // The same four texels as bilinear PCF, each compared against the depth
+    // of the receiver plane on its own ray, rather than the center ray.
+    [unroll]
+    for (int y = 0; y < 2; ++y) {
+        [unroll]
+        for (int x = 0; x < 2; ++x) {
+            const int2 pixel = clamp(base + int2(x, y), firstPixel, lastPixel);
+            const float2 localUv = (float2(pixel - firstPixel) + 0.5) / float2(tileSize);
+            const float3 ray = point_shadow_ray(localUv, face);
+            const float denominator = dot(receiverPlane.xyz, ray);
+            float sampleVisibility = 1.0;
+            // A neighboring ray beyond the receiver's horizon cannot hit it.
+            if (receiverPlane.w * denominator > 0.0) {
+                const float receiverDepth = receiverPlane.w * length(ray) / denominator;
+                const float storedDepth = shadowAtlas.Load(int3(pixel, 0));
+                sampleVisibility = receiverDepth - bias <= storedDepth ? 1.0 : 0.0;
+            }
+            const float2 weight = float2(
+                x == 0 ? 1.0 - fraction.x : fraction.x,
+                y == 0 ? 1.0 - fraction.y : fraction.y
+            );
+            visibility += sampleVisibility * weight.x * weight.y;
+        }
+    }
+    return visibility;
+}
+
 float point_face_shadow(
     float3 direction,
     int face,
     int firstFace,
-    float receiverDepth,
+    float4 receiverPlane,
+    float bias,
     float texel,
     float softness
 ) {
-    return pcf_shadow(
-        point_shadow_uv_for_face(direction, face),
-        pointShadowAtlasRects[firstFace + face],
-        receiverDepth,
-        texel,
-        softness
-    );
+    const float2 uv = point_shadow_uv_for_face(direction, face);
+    const float4 rect = pointShadowAtlasRects[firstFace + face];
+    if (softness <= 0.0001) {
+        return point_shadow_compare(uv, face, rect, receiverPlane, bias);
+    }
+    const float radius = texel * (0.75 + softness * 1.5);
+    float visibility = 0.0;
+    [unroll]
+    for (int sampleIndex = 0; sampleIndex < 16; ++sampleIndex) {
+        visibility += point_shadow_compare(
+            uv + shadowPoissonDisk[sampleIndex] * radius,
+            face, rect, receiverPlane, bias
+        );
+    }
+    return visibility * (1.0 / 16.0);
 }
 
 float projected_face_shadow(
@@ -555,11 +612,8 @@ float shadow_visibility(
         const float distanceToLight = length(toFragment);
         const float range = max(lights[lightIndex].positionReach.w, 0.0001);
         if (distanceToLight <= 0.0001 || distanceToLight >= range) return 1.0;
-        const float bias = max(
-            settings.y * (0.2 + slope * 0.8),
-            texel * 0.75 / max(normalLightDot, 0.35)
-        );
-        const float receiverDepth = distanceToLight / range - bias;
+        const float bias = settings.y * (0.2 + slope * 0.8);
+        const float4 receiverPlane = float4(normal, dot(normal, toFragment) / range);
         const float softness = shadowSlots[lightIndex].w;
         const float3 absoluteDirection = abs(toFragment);
         const float dominant = max(
@@ -576,7 +630,8 @@ float shadow_visibility(
             toFragment,
             dominantFace,
             firstFace,
-            receiverDepth,
+            receiverPlane,
+            bias,
             texel,
             softness
         );
@@ -587,21 +642,21 @@ float shadow_visibility(
             && absoluteDirection.x >= adjacentThreshold) {
             const int face = toFragment.x >= 0.0 ? 0 : 1;
             visibility = min(visibility, point_face_shadow(
-                toFragment, face, firstFace, receiverDepth, texel, softness
+                toFragment, face, firstFace, receiverPlane, bias, texel, softness
             ));
         }
         if (dominantFace != 2 && dominantFace != 3
             && absoluteDirection.y >= adjacentThreshold) {
             const int face = toFragment.y >= 0.0 ? 2 : 3;
             visibility = min(visibility, point_face_shadow(
-                toFragment, face, firstFace, receiverDepth, texel, softness
+                toFragment, face, firstFace, receiverPlane, bias, texel, softness
             ));
         }
         if (dominantFace != 4 && dominantFace != 5
             && absoluteDirection.z >= adjacentThreshold) {
             const int face = toFragment.z >= 0.0 ? 4 : 5;
             visibility = min(visibility, point_face_shadow(
-                toFragment, face, firstFace, receiverDepth, texel, softness
+                toFragment, face, firstFace, receiverPlane, bias, texel, softness
             ));
         }
         return visibility;
@@ -657,6 +712,7 @@ float3 evaluate_light(
     LightData light,
     float3 position,
     float3 normal,
+    float3 shadowNormal,
     float3 viewDirection,
     float3 albedo,
     float metallic,
@@ -703,7 +759,7 @@ float3 evaluate_light(
     const float visibility = shadow_visibility(
         lightIndex,
         position,
-        normal,
+        kind > 0.5 && kind < 1.5 ? shadowNormal : normal,
         lightDirection
     );
     return (diffuse + specular) * light.colorType.rgb *
@@ -773,6 +829,13 @@ float4 fragment_main(VertexOutput input, bool frontFace : SV_IsFrontFace) : SV_T
         normalUv,
         materialSettings.z
     );
+    // Derivatives describe the rasterized triangle plane even with smoothed or
+    // normal-mapped shading normals. Compute them before divergent light tests.
+    float3 shadowNormal = cross(ddx(input.worldPosition), ddy(input.worldPosition));
+    const float planeLengthSquared = dot(shadowNormal, shadowNormal);
+    shadowNormal = planeLengthSquared > 1e-20
+        ? shadowNormal * rsqrt(planeLengthSquared) : geometryNormal;
+    if (dot(shadowNormal, geometryNormal) < 0.0) shadowNormal = -shadowNormal;
     const float3 viewDirection = normalize(cameraPosition.xyz - input.worldPosition);
     const float2 metallicRoughnessUv = transformed_uv(
         input.uv,
@@ -828,6 +891,7 @@ float4 fragment_main(VertexOutput input, bool frontFace : SV_IsFrontFace) : SV_T
             lights[index],
             input.worldPosition,
             normal,
+            shadowNormal,
             viewDirection,
             albedo,
             metallic,

@@ -1929,7 +1929,7 @@ local func canvas_panel_shadow_pipeline(
             front_face:shadow_front_face(point),
             depth_bias:2.0,
             depth_bias_slope:3.0,
-            bias_depth:true
+            bias_depth:!point
         ),
         depth_stencil:GPU.DepthStencilState(
             depth_compare:GPU.Compare.less,
@@ -1962,7 +1962,7 @@ local func shadow_pipeline(
             front_face:shadow_front_face(point),
             depth_bias:2.0,
             depth_bias_slope:3.0,
-            bias_depth:true
+            bias_depth:!point
         ),
         depth_stencil:GPU.DepthStencilState(
             depth_compare:GPU.Compare.less,

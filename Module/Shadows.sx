@@ -319,7 +319,9 @@ class Frame {
         let slot = self.faces.count()
         let column = slot % self.atlas_grid
         let row = slot / self.atlas_grid
-        let scale = 1.0 / self.atlas_grid as float
+        // The renderer uses integer pixel viewports; 8192 is not divisible by
+        // every atlas grid (notably the 3x3 grid for one point light).
+        let scale = (atlas_size() / self.atlas_grid) as float / atlas_size() as float
         var projected_index = -1
         if !point { projected_index = self.projected_face_count }
         self.faces.append(Face(

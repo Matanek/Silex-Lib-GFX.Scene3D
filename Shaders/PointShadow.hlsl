@@ -43,7 +43,7 @@ struct FragmentOutput {
 
 FragmentOutput fragment_main(VertexOutput input) {
     const float range = max(lightPositionRange.w, 0.0001);
-    const float depth = saturate(length(input.worldPosition - lightPositionRange.xyz) / range - 0.00008);
+    const float depth = saturate(length(input.worldPosition - lightPositionRange.xyz) / range);
     FragmentOutput output;
     output.depth = depth;
     return output;

@@ -44,28 +44,7 @@ func inspect_contact(
     renderer:@Renderer,
     controller:&Application.Controller
 ) {
-    var color = device.texture(GPU.TextureSettings(
-        format:surface.format(), width:128, height:128,
-        usage:GPU.TextureUsage(color_target:true)
-    ))
-    var depth = device.texture(GPU.TextureSettings(
-        format:GPU.TextureFormat.depth16, width:128, height:128,
-        usage:GPU.TextureUsage(depth_stencil_target:true)
-    ))
-    var download = device.download_buffer(128 * 128 * 4)
-    var commands = device.commands()
-    var colors:GPU.ColorTarget[] = [GPU.ColorTarget(texture:color, clear:Color.black())]
-    var pass = commands.render(colors, GPU.DepthTarget(texture:depth))
-    pass.viewport(0.0, 0.0, 128.0, 128.0)
-    pass.scissor(0, 0, 128, 128)
-    renderer.draw(pass)
-    pass.finish()
-    var transfer = commands.copy()
-    transfer.download(GPU.TextureRegion(texture:color, width:128, height:128), download, 128, 128)
-    transfer.finish()
-    var completed = commands.submit_and_track()
-    completed.wait()
-    let pixels = download.read()
+    let pixels = read_scene(device, surface, renderer)
     assert(renderer.active_batch_count() == 2)
     // The cube top must be lit, so an empty or entirely dark render cannot pass.
     assert(pixels[(64 * 128 + 8) * 4] > 200 as uint8)
@@ -100,5 +79,124 @@ test "keep point shadows attached to a cube resting on a plane" {
     application.add_plugin(Scene3D.Plugin())
     application.add_system(Application.Schedule.startup, create_contact_scene)
     application.add_after_system(Application.Schedule.render, inspect_contact)
+    assert(application.run() == 0)
+}
+
+func read_scene(device:@GPU.Device, surface:@GPU.Surface, renderer:@Renderer) uint8[] {
+    var color = device.texture(GPU.TextureSettings(
+        format:surface.format(), width:128, height:128,
+        usage:GPU.TextureUsage(color_target:true)
+    ))
+    var depth = device.texture(GPU.TextureSettings(
+        format:GPU.TextureFormat.depth16, width:128, height:128,
+        usage:GPU.TextureUsage(depth_stencil_target:true)
+    ))
+    var download = device.download_buffer(128 * 128 * 4)
+    var commands = device.commands()
+    var colors:GPU.ColorTarget[] = [GPU.ColorTarget(texture:color, clear:Color.black())]
+    var pass = commands.render(colors, GPU.DepthTarget(texture:depth))
+    pass.viewport(0.0, 0.0, 128.0, 128.0)
+    pass.scissor(0, 0, 128, 128)
+    renderer.draw(pass)
+    pass.finish()
+    var transfer = commands.copy()
+    transfer.download(GPU.TextureRegion(texture:color, width:128, height:128), download, 128, 128)
+    transfer.finish()
+    var completed = commands.submit_and_track()
+    completed.wait()
+    return download.read()
+}
+
+struct LitPlaneProbe {
+    var reference:uint8[] = []
+    var frame:int = 0
+}
+
+func create_lit_plane(world:&ECS.World, meshes:&Scene3D.Meshes) {
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(
+            position:Math.Vec3(0.0, 3.0, 0.0),
+            rotation:Math.Quat.angle_axis(Math.radians(-90.0), Math.Vec3.right())
+        ))
+        ..with(Scene3D.Camera(near_plane:0.05, far_plane:10.0, vertical_fov:Math.radians(70.0)))
+    )
+    let floor = meshes.add(Scene3D.Geometry.Plane.make(Math.Vec2(8.0)))
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(rotation:Math.Quat.angle_axis(
+            Math.radians(-90.0), Math.Vec3.right()
+        )))
+        ..with(Scene3D.Mesh(floor, casts_shadows:false))
+        ..with(Scene3D.Material(roughness:0.9))
+    )
+    world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.18, 0.0)))
+        ..with(Scene3D.PointLight(radius:5.0, intensity:2.2))
+    )
+}
+
+func inspect_lit_plane(
+    device:@GPU.Device,
+    surface:@GPU.Surface,
+    renderer:@Renderer,
+    world:&ECS.World,
+    probe:&LitPlaneProbe,
+    controller:&Application.Controller
+) {
+    let pixels = read_scene(device, surface, renderer)
+    if probe.frame == 0 {
+        assert(pixels.count() == 128 * 128 * 4)
+        assert(pixels[(64 * 128 + 64) * 4] > 180 as uint8)
+        probe.reference = pixels
+        for entity in world.entities() {
+            if world.has<Scene3D.Mesh>(entity) {
+                world.update<Scene3D.Mesh>(entity, func(mesh:&Scene3D.Mesh) {
+                    mesh.casts_shadows = true
+                })
+            }
+        }
+        probe.frame++
+        return
+    }
+    var differences = 0
+    var worst = 0.0
+    var index = 0
+    while index < pixels.count() {
+        let difference = Math.abs((pixels[index] as int) - (probe.reference[index] as int))
+        if difference > 3 { differences++ }
+        worst = Math.max(worst, difference)
+        index++
+    }
+    if differences > 0 {
+        print("lit plane: $(differences) changed channels, largest error $(worst)")
+    }
+    assert(differences == 0)
+    if probe.frame == 1 {
+        for entity in world.entities() {
+            if world.has<Scene3D.PointLight>(entity) {
+                world.update<Scene3D.PointLight>(entity, func(light:&Scene3D.PointLight) {
+                    light.shadow.softness = 0.75
+                })
+            }
+        }
+        probe.frame++
+        return
+    }
+    controller.stop()
+}
+
+test "keep a point-lit plane free of self shadows at grazing incidence and cube seams" {
+    var application = Application()
+    application.add_resource(LitPlaneProbe())
+    application.add_plugin(WindowPlugin(WindowPlugin.Settings()
+        ..width = 128
+        ..height = 128
+        ..hidden = true
+    ))
+    application.add_plugin(Rendering.Plugin(Rendering.Plugin.Settings(
+        antialiasing:Rendering.Antialiasing.none, presentation:false
+    )))
+    application.add_plugin(Scene3D.Plugin())
+    application.add_system(Application.Schedule.startup, create_lit_plane)
+    application.add_after_system(Application.Schedule.render, inspect_lit_plane)
     assert(application.run() == 0)
 }

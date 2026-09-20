@@ -281,7 +281,7 @@ func refresh_shadows(
         write_float(
             address,
             light_index * 16 + 8,
-            frame.grid() as float / Shadows.atlas_size() as float
+            1.0 / (Shadows.atlas_size() / frame.grid()) as float
         )
         write_float(address, light_index * 16 + 12, light.shadow.normal_offset)
         write_float(address, 256 + light_index * 16, frame.sample_base(light_index) as float)

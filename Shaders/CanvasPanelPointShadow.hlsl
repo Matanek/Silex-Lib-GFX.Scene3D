@@ -52,7 +52,7 @@ FragmentOutput fragment_main(VertexOutput input) {
     const float range = max(lightPositionRange.w, 0.0001);
     FragmentOutput output;
     output.depth = saturate(
-        length(input.worldPosition - lightPositionRange.xyz) / range - 0.00008
+        length(input.worldPosition - lightPositionRange.xyz) / range
     );
     return output;
 }
