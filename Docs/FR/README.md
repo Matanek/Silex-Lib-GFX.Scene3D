@@ -32,10 +32,14 @@ Le catalogue aplati conserve les suffixes dimensionnels :
 use GFX.Plugins
 
 application
-    ..add_plugin(Plugins.ViewportCamera3D())
-    ..add_plugin(Plugins.ViewportAxis3D())
     ..add_plugin(Plugins.ViewportAxisController3D())
 ```
+
+`ViewportAxisController3D` installe le widget d’axes, une caméra de viewport
+et les scènes 2D/3D nécessaires. Ajoutez explicitement `ViewportAxis3D`,
+`ViewportCamera3D` ou `Window` pour personnaliser leurs réglages, dans l’ordre
+de votre choix avant `run()`. Une caméra `FirstPersonCamera3D` explicite est
+conservée sans ajout d’une seconde caméra de viewport.
 
 `Plugins.Scene3D` installe ECS et Rendering, possède le cache de meshes et
 enregistre une passe 3D avec profondeur. Un renderer alternatif peut consommer

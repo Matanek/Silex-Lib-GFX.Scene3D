@@ -46,8 +46,6 @@ can meet:
 use GFX.Plugins
 
 application
-    ..add_plugin(Plugins.ViewportCamera3D())
-    ..add_plugin(Plugins.ViewportAxis3D())
     ..add_plugin(Plugins.ViewportAxisController3D())
 ```
 
@@ -55,6 +53,11 @@ application
 layer, resting and hovered circular backgrounds, and X/Y/Z colors.
 `ViewportAxisController.Settings.button` selects the pointer button used for
 preset views and circular-background orbit.
+
+`ViewportAxisController3D` installs the axis widget, a viewport camera, and
+the required 2D/3D scenes. Add `ViewportAxis3D`, `ViewportCamera3D`, or `Window`
+explicitly to customize their settings, in either order before `run()`. An
+explicit `FirstPersonCamera3D` is preserved without adding another viewport camera.
 
 `Plugins.Scene3D` installs the ECS and generic rendering dependencies, owns the
 built-in mesh cache, and registers a depth-aware Scene3D pass. Applications

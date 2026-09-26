@@ -1,0 +1,57 @@
+use GFX.Application
+use GFX.Plugins
+use GFX.Resources
+use STD.Math
+
+func inspect_axis(application:Application) {
+    assert(application.has_plugin("GFX.Scene3D.ViewportAxis"))
+    assert(application.has_plugin("GFX.Scene3D.ViewportCamera"))
+    assert(application.has_plugin("GFX.Scene3D.Plugin"))
+    assert(application.has_plugin("GFX.Scene2D.Plugin"))
+    assert(application.has_plugin("GFX.Window.Plugin"))
+    var renderer = application.resources().get<Resources.Renderer>()
+    assert(renderer.stats().draw_calls() > 0)
+    application.stop()
+}
+
+test "axis controller installs its widget camera and rendering dependencies" {
+    var app = Application()..add_plugin(Plugins.ViewportAxisController3D())
+        ..add_after_system(Application.Schedule.render, inspect_axis)
+    assert(app.run() == 0)
+}
+
+func inspect_configured_camera(camera:@Resources.ViewportCamera3D, controller:&Application.Controller) {
+    assert(camera.target() == Math.Vec3(4.0, 5.0, 6.0))
+    assert(camera.distance() == 12.0)
+    controller.stop()
+}
+
+test "axis controller keeps an explicitly configured camera in either order" {
+    for camera_first in [false, true] {
+        let camera = Plugins.ViewportCamera3D(Plugins.ViewportCamera3D.Settings()
+            ..target = Math.Vec3(4.0, 5.0, 6.0)..distance = 12.0)
+        var app = Application()..add_plugin(Plugins.Window(Plugins.Window.Settings()..hidden = true))
+        if camera_first { app.add_plugin(camera) }
+        app.add_plugin(Plugins.ViewportAxisController3D())
+        if !camera_first { app.add_plugin(camera) }
+        app.add_after_system(Application.Schedule.render, inspect_configured_camera)
+        assert(app.run() == 0)
+    }
+}
+
+func inspect_first_person(application:Application) {
+    assert(!application.has_plugin("GFX.Scene3D.ViewportCamera"))
+    var camera = application.resources().get<Resources.FirstPersonCamera3D>()
+    assert(camera.position() == Math.Vec3(2.0, 3.0, 4.0))
+    application.stop()
+}
+
+test "axis controller preserves an explicit first person camera" {
+    var app = Application()
+        ..add_plugin(Plugins.Window(Plugins.Window.Settings()..hidden = true))
+        ..add_plugin(Plugins.ViewportAxisController3D())
+        ..add_plugin(Plugins.FirstPersonCamera3D(Plugins.FirstPersonCamera3D.Settings()
+            ..position = Math.Vec3(2.0, 3.0, 4.0)..capture_mouse = false))
+        ..add_after_system(Application.Schedule.render, inspect_first_person)
+    assert(app.run() == 0)
+}

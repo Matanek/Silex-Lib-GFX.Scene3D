@@ -4,6 +4,9 @@ use GFX.Application.Schedule
 use GFX.Input
 use GFX.Input.Plugin as InputPlugin
 use GFX.Input.State as InputState
+use GFX.Scene3D.Catalogs.FirstPersonCamera3D
+use GFX.Scene3D.ViewportAxis.ViewportAxis
+use GFX.Scene3D.ViewportCamera.ViewportCamera
 use GFX.Scene3D.ViewportAxis.ViewportAxisState
 use GFX.Scene3D.ViewportCamera.Controller as CameraController
 use GFX.Scene3D.ViewportCamera.View
@@ -41,6 +44,12 @@ public struct ViewportAxisController:PluginProtocol {
 
     func build(application:&Application) {
         application.add_plugin(InputPlugin())
+        application.add_plugin(ViewportAxis())
+        if application.has_plugin("GFX.Scene3D.FirstPersonCamera") {
+            application.add_plugin(FirstPersonCamera3D())
+        } else {
+            application.add_plugin(ViewportCamera())
+        }
         application.add_resource(ViewportAxisControllerState(self.settings))
         application.add_after_system(Schedule.pre_update, update_viewport_axis_controller)
         application.add_system(Schedule.shutdown, stop_viewport_axis_controller)
