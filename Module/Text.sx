@@ -142,9 +142,11 @@ package class TextCache {
             success(canvas_placements) => {
                 var placements:Font.PlacedOutline[] = []
                 var baselines:Math.Vec2[] = []
+                var identities:str[] = []
                 for placement in canvas_placements {
                     placements.append(placement.glyph)
                     baselines.append(placement.baseline)
+                    identities.append(placement.outline_identity)
                 }
                 var identity = "canvas-empty"
                 var face_identity = "canvas-empty"
@@ -160,7 +162,8 @@ package class TextCache {
                     plane,
                     tolerance,
                     true,
-                    layer.color()
+                    layer.color(),
+                    identities
                 )
             }
         }
@@ -174,7 +177,8 @@ package class TextCache {
         plane:TextPlane,
         tolerance:float,
         canvas_y_down:bool,
-        color:Color
+        color:Color,
+        identities:str[] = []
     ) Result<TextBuild, TextError> {
         let normal = plane.x_axis.cross(plane.y_axis).normalized()
         var vertices:Vertex[] = []
@@ -186,7 +190,11 @@ package class TextCache {
             let placement = placements[placement_index]
             if let outline = placement.outline {
                 if !outline.is_empty() {
-                    let key = identity + "|glyph=$(placement.glyph_id)|tolerance=$(tolerance)"
+                    var selected_identity = identity
+                    if placement_index < identities.count() && identities[placement_index] != "" {
+                        selected_identity = identities[placement_index]
+                    }
+                    let key = selected_identity + "|glyph=$(placement.glyph_id)|tolerance=$(tolerance)"
                     let flat = self.glyph_mesh(key, outline, tolerance)
                     let base = vertices.count() as uint32
                     var baseline = Math.Vec2()

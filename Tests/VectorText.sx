@@ -151,6 +151,52 @@ test "convert a retained Canvas text layer with an explicit Y-down adaptation" {
     assert(meshes.text_cache_stats().placed_glyphs == 2)
 }
 
+test "retain both faces when converting bundled fallback text to a 3D mesh" {
+    var drawing = Canvas.Canvas()
+    drawing.paint(func(painter:&Canvas.Painter) {
+        painter.text("B→é", Math.Vec2(8.0, 12.0), Canvas.TextStyle(size:18.0))
+    })
+    var layer = drawing.snapshot(96, 48).text_layers()[0]
+    var runs = layer.glyph_runs()
+    assert(runs.count() == 3)
+    assert(runs[0].instance().face().identity() != runs[1].instance().face().identity())
+    var meshes = Scene3D.Meshes()
+    let plane = Scene3D.TextPlane(origin:Math.Vec3(),
+        x_axis:Math.Vec3(1.0, 0.0, 0.0), y_axis:Math.Vec3(0.0, 1.0, 0.0))
+    let handle = required_text(meshes.add_canvas_text(layer, plane))
+    assert(meshes.snapshot(handle).triangle_count() > 0)
+    assert(meshes.text_cache_stats().placed_glyphs == 3)
+    let tessellations = meshes.text_cache_stats().tessellations
+    let repeated = required_text(meshes.add_canvas_text(layer, plane))
+    let before = meshes.snapshot(handle).vertices()
+    let after = meshes.snapshot(repeated).vertices()
+    assert(before.count() == after.count())
+    for index, vertex in before.indexed() { assert(vertex == after[index]) }
+    assert(meshes.text_cache_stats().tessellations == tessellations)
+}
+
+test "a leading fallback symbol preserves the variable face identity of following letters" {
+    var thin = Canvas.Canvas()
+    thin.paint(func(painter:&Canvas.Painter) {
+        painter.text("→A", Math.Vec2(), Canvas.TextStyle(size:18.0,
+            variations:[Font.Variation("wght", 100.0)]))
+    })
+    var black = Canvas.Canvas()
+    black.paint(func(painter:&Canvas.Painter) {
+        painter.text("→A", Math.Vec2(), Canvas.TextStyle(size:18.0,
+            variations:[Font.Variation("wght", 900.0)]))
+    })
+    var meshes = Scene3D.Meshes()
+    let plane = Scene3D.TextPlane(origin:Math.Vec3(),
+        x_axis:Math.Vec3(1.0, 0.0, 0.0), y_axis:Math.Vec3(0.0, 1.0, 0.0))
+    let first = required_text(meshes.add_canvas_text(thin.snapshot(96, 48).text_layers()[0], plane))
+    assert(meshes.text_cache_stats().tessellations == 2)
+    let second = required_text(meshes.add_canvas_text(black.snapshot(96, 48).text_layers()[0], plane))
+    assert(meshes.text_cache_stats().tessellations == 3)
+    assert(meshes.snapshot(first).vertices().count() > 0)
+    assert(meshes.snapshot(second).vertices().count() > 0)
+}
+
 test "reject degenerate planes before creating a mesh" {
     var face = required_face(Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf")))
     var instance = required_instance(Font.Instance.create(face, size:1.0))
