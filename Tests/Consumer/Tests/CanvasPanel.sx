@@ -57,3 +57,24 @@ test "consume Canvas panels geometry materials lights and receivers publicly" {
         success(handle) => { assert(meshes.snapshot(handle).triangle_count() > 2) }
     }
 }
+
+
+test "clipped Canvas keeps its intent for panels and refuses mesh flattening" {
+    var drawing = Canvas()
+    drawing.paint(func(painter:&Canvas.Painter) {
+        painter.clip(Canvas.Rect(Math.Vec2(4.0), Math.Vec2(8.0)), func(clipped:&Canvas.Painter) {
+            clipped.fill(Canvas.Rect(Math.Vec2(), Math.Vec2(32.0)), Canvas.Fill.solid(Color.white()))
+        })
+    })
+    var meshes = Scene3D.Meshes()
+    match meshes.add_canvas_geometry(drawing.snapshot(32, 32),
+        Canvas.Rect(Math.Vec2(), Math.Vec2(32.0)),
+        Scene3D.PlaneMapping(origin:Math.Vec3(), x_axis:Math.Vec3.right(), y_axis:Math.Vec3.up())) {
+        success(handle) => { panic("expected clipped Canvas rejection") }
+        failure(error) => {
+            assert(error.detail == "Scene3D Canvas geometry rejects clips, image fills and raster effects; use CanvasPanel")
+        }
+    }
+    var panel = Scene3D.CanvasPanel(drawing, Canvas.Rect(Math.Vec2(), Math.Vec2(32.0)), 1.0, Math.Vec2(1.0))
+    assert(!drawing.vector_geometry_compatible())
+}

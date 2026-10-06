@@ -230,9 +230,10 @@ plein. Une surface blend conserve les limites de tri des transparences 3D.
 vectorielles, gradients linéaires et textes à contours vers des positions,
 normales et UV physiques selon un `PlaneMapping`. Les cercles et rectangles
 arrondis sont réellement tessellés, donc leurs ombres respectent la
-silhouette. ImagePaint, effets raster, frame dégénéré et axes colinéaires sont
-refusés explicitement ; utiliser `CanvasPanel` pour ces cas. La conversion ne
-crée ni extrusion ni bevel.
+silhouette. Clips de groupe, ImagePaint, effets raster, frame dégénéré et axes
+colinéaires sont refusés explicitement ; utiliser `CanvasPanel` pour ces cas. La conversion ne
+crée ni extrusion ni bevel. `CanvasPanel` conserve le découpage rectangulaire
+et les effets des couches via le compositeur de surfaces Scene2D.
 
 ## Ombres solaires ajustées à la caméra
 

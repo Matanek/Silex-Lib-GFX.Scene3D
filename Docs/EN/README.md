@@ -252,10 +252,11 @@ surfaces keep Scene3D's normal transparency-ordering limitations.
 `Meshes.add_canvas_geometry` expresses the other intent. It converts vector
 shapes, linear gradients, and outlined text into physical positions, normals,
 and UVs through a `PlaneMapping`. Circles and rounded rectangles are actually
-tessellated, so their shadows preserve the silhouette. ImagePaint, raster
-effects, degenerate frames, and collinear axes fail explicitly; use
+tessellated, so their shadows preserve the silhouette. Group clips, ImagePaint,
+raster effects, degenerate frames, and collinear axes fail explicitly; use
 `CanvasPanel` for those cases. The conversion does not create extrusion or
-bevels.
+bevels. `CanvasPanel` preserves rectangular clipping and layer effects through
+the Scene2D surface compositor.
 
 ## Camera-fitted sun shadows
 

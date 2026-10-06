@@ -46,7 +46,7 @@ package func build_canvas_geometry(
     if !snapshot.vector_geometry_compatible() {
         return Result<GeometryMesh, CanvasGeometryError>.failure(
             geometry_error(
-                "Scene3D Canvas geometry rejects image fills and raster effects; use CanvasPanel"
+                "Scene3D Canvas geometry rejects clips, image fills and raster effects; use CanvasPanel"
             )
         )
     }

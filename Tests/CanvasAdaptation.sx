@@ -176,7 +176,7 @@ test "reject raster-only Canvas commands and degenerate mappings explicitly" {
         success(handle) => { panic("expected raster-only Canvas rejection") }
         failure(error) => {
             assert(error.detail ==
-                "Scene3D Canvas geometry rejects image fills and raster effects; use CanvasPanel")
+                "Scene3D Canvas geometry rejects clips, image fills and raster effects; use CanvasPanel")
         }
     }
 
