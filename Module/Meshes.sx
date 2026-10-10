@@ -45,7 +45,7 @@ public class Meshes {
     }
 
     func add_text(text:Text) Result<MeshHandle, TextError> {
-        match self.text_cache.build(text) {
+        match (try self.text_cache.build(text)) {
             failure(error) => { return Result<MeshHandle, TextError>.failure(error) }
             success(built) => {
                 return Result<MeshHandle, TextError>.success(self.add(built.mesh))
@@ -58,7 +58,7 @@ public class Meshes {
         plane:TextPlane,
         tolerance:float = 0.0075
     ) Result<MeshHandle, TextError> {
-        match self.text_cache.build_canvas(layer, plane, tolerance) {
+        match (try self.text_cache.build_canvas(layer, plane, tolerance)) {
             failure(error) => { return Result<MeshHandle, TextError>.failure(error) }
             success(built) => {
                 return Result<MeshHandle, TextError>.success(self.add(built.mesh))
@@ -72,9 +72,9 @@ public class Meshes {
         mapping:PlaneMapping,
         tolerance:float = 0.0075
     ) Result<MeshHandle, CanvasGeometryError> {
-        match build_canvas_geometry(
+        match (try build_canvas_geometry(
             snapshot, frame, mapping, tolerance, self.text_cache
-        ) {
+        )) {
             failure(error) => {
                 return Result<MeshHandle, CanvasGeometryError>.failure(error)
             }

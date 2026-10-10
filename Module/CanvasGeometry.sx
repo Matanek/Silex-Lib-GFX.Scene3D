@@ -37,7 +37,7 @@ package func build_canvas_geometry(
     tolerance:float,
     text_cache:&TextCache
 ) Result<GeometryMesh, CanvasGeometryError> {
-    match validate_conversion(frame, mapping, tolerance) {
+    match (try validate_conversion(frame, mapping, tolerance)) {
         failure(error) => {
             return Result<GeometryMesh, CanvasGeometryError>.failure(error)
         }
@@ -58,7 +58,7 @@ package func build_canvas_geometry(
 
     var layers = snapshot.text_layers()
     for layer in layers {
-        match text_cache.build_canvas(
+        match (try text_cache.build_canvas(
             layer,
             TextPlane(
                 origin:mapping.origin,
@@ -66,7 +66,7 @@ package func build_canvas_geometry(
                 y_axis:mapping.y_axis
             ),
             tolerance
-        ) {
+        )) {
             failure(error) => {
                 return Result<GeometryMesh, CanvasGeometryError>.failure(
                     converted_text_error(error)

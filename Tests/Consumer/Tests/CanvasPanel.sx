@@ -44,7 +44,7 @@ test "consume Canvas panels geometry materials lights and receivers publicly" {
     assert(world.has<Scene3D.SunLight>(light))
 
     var snapshot = drawing.snapshot(48, 32)
-    match meshes.add_canvas_geometry(
+    match (try meshes.add_canvas_geometry(
         snapshot,
         Canvas.Rect(Math.Vec2(), Math.Vec2(48.0, 32.0)),
         Scene3D.PlaneMapping(
@@ -52,7 +52,7 @@ test "consume Canvas panels geometry materials lights and receivers publicly" {
             x_axis:Math.Vec3(0.05, 0.0, 0.0),
             y_axis:Math.Vec3(0.0, 0.05, 0.0)
         )
-    ) {
+    )) {
         failure(error) => { panic(error.detail) }
         success(handle) => { assert(meshes.snapshot(handle).triangle_count() > 2) }
     }
@@ -67,9 +67,9 @@ test "clipped Canvas keeps its intent for panels and refuses mesh flattening" {
         })
     })
     var meshes = Scene3D.Meshes()
-    match meshes.add_canvas_geometry(drawing.snapshot(32, 32),
+    match (try meshes.add_canvas_geometry(drawing.snapshot(32, 32),
         Canvas.Rect(Math.Vec2(), Math.Vec2(32.0)),
-        Scene3D.PlaneMapping(origin:Math.Vec3(), x_axis:Math.Vec3.right(), y_axis:Math.Vec3.up())) {
+        Scene3D.PlaneMapping(origin:Math.Vec3(), x_axis:Math.Vec3.right(), y_axis:Math.Vec3.up()))) {
         success(handle) => { panic("expected clipped Canvas rejection") }
         failure(error) => {
             assert(error.detail == "Scene3D Canvas geometry rejects clips, image fills and raster effects; use CanvasPanel")

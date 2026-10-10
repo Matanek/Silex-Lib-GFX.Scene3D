@@ -90,13 +90,13 @@ package class TextCache {
     }
 
     func build(text:Text) Result<TextBuild, TextError> {
-        match validate_plane(text.plane, text.tolerance) {
+        match (try validate_plane(text.plane, text.tolerance)) {
             failure(error) => { return Result<TextBuild, TextError>.failure(error) }
             success => {}
         }
         var run = text.run
         let identity = instance_key(run.instance())
-        match run.outlines() {
+        match (try run.outlines()) {
             failure(error) => {
                 return Result<TextBuild, TextError>.failure(TextError(
                     detail:error.detail,
@@ -106,7 +106,7 @@ package class TextCache {
                 ))
             }
             success(placements) => {
-                return self.build_placements(
+                return (try self.build_placements(
                     placements,
                     [],
                     identity,
@@ -115,7 +115,7 @@ package class TextCache {
                     text.tolerance,
                     false,
                     Color.white()
-                )
+                ))
             }
         }
     }
@@ -125,12 +125,12 @@ package class TextCache {
         plane:TextPlane,
         tolerance:float
     ) Result<TextBuild, TextError> {
-        match validate_plane(plane, tolerance) {
+        match (try validate_plane(plane, tolerance)) {
             failure(error) => { return Result<TextBuild, TextError>.failure(error) }
             success => {}
         }
         var runs = layer.glyph_runs()
-        match layer.vector_outlines() {
+        match (try layer.vector_outlines()) {
             failure(error) => {
                 return Result<TextBuild, TextError>.failure(TextError(
                     detail:error.detail,
@@ -154,7 +154,7 @@ package class TextCache {
                     identity = instance_key(runs[0].instance())
                     face_identity = runs[0].instance().face().identity()
                 }
-                return self.build_placements(
+                return (try self.build_placements(
                     placements,
                     baselines,
                     identity,
@@ -164,7 +164,7 @@ package class TextCache {
                     true,
                     layer.color(),
                     identities
-                )
+                ))
             }
         }
     }

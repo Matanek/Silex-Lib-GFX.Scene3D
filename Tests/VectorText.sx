@@ -18,7 +18,7 @@ func required_instance(result:Result<Font.Instance, Font.Error>) Font.Instance {
 }
 
 func required_run(instance:&Font.Instance, value:str) Font.GlyphRun {
-    match instance.shape(value) {
+    match (try instance.shape(value)) {
         failure(error) => { panic(error.detail) }
         success(run) => { return run }
     }
@@ -68,8 +68,8 @@ func test_coordinate(value:float64) float {
 }
 
 test "build planar vector text with physical normals bounds and counter holes" {
-    var face = required_face(Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf")))
-    var instance = required_instance(Font.Instance.create(face, size:1.0))
+    var face = required_face((try Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf"))))
+    var instance = required_instance((try Font.Instance.create(face, size:1.0)))
     var run = required_run(instance, "O")
     var meshes = Scene3D.Meshes()
     let plane = Scene3D.TextPlane(
@@ -77,7 +77,7 @@ test "build planar vector text with physical normals bounds and counter holes" {
         x_axis:Math.Vec3.right(),
         y_axis:Math.Vec3.up()
     )
-    let handle = required_text(meshes.add_text(Scene3D.Text(run, plane:plane)))
+    let handle = required_text((try meshes.add_text(Scene3D.Text(run, plane:plane))))
     let mesh = meshes.snapshot(handle)
     assert(mesh.vertex_count() > 0)
     assert(mesh.index_count() > 0)
@@ -88,7 +88,7 @@ test "build planar vector text with physical normals bounds and counter holes" {
 
     let glyph = run.glyphs()[0]
     var outline:Font.GlyphOutline? = null
-    match instance.outline(glyph.id) {
+    match (try instance.outline(glyph.id)) {
         failure(error) => { panic(error.detail) }
         success(value) => { outline = value }
     }
@@ -102,9 +102,9 @@ test "build planar vector text with physical normals bounds and counter holes" {
 }
 
 test "share normalized glyph meshes across sizes and retain geometry across scene changes" {
-    var face = required_face(Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf")))
-    var small = required_instance(Font.Instance.create(face, size:12.0))
-    var large = required_instance(Font.Instance.create(face, size:72.0))
+    var face = required_face((try Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf"))))
+    var small = required_instance((try Font.Instance.create(face, size:12.0)))
+    var large = required_instance((try Font.Instance.create(face, size:72.0)))
     var small_run = required_run(small, "BO")
     var large_run = required_run(large, "BO")
     var meshes = Scene3D.Meshes()
@@ -113,9 +113,9 @@ test "share normalized glyph meshes across sizes and retain geometry across scen
         x_axis:Math.Vec3(0.01, 0.0, 0.0),
         y_axis:Math.Vec3(0.0, 0.01, 0.0)
     )
-    required_text(meshes.add_text(Scene3D.Text(small_run, plane:plane)))
+    required_text((try meshes.add_text(Scene3D.Text(small_run, plane:plane))))
     let first = meshes.text_cache_stats()
-    required_text(meshes.add_text(Scene3D.Text(large_run, plane:plane)))
+    required_text((try meshes.add_text(Scene3D.Text(large_run, plane:plane))))
     let second = meshes.text_cache_stats()
     assert(first.tessellations == 2)
     assert(second.tessellations == first.tessellations)
@@ -139,14 +139,14 @@ test "convert a retained Canvas text layer with an explicit Y-down adaptation" {
     })
     var layers = drawing.snapshot(96, 48).text_layers()
     var meshes = Scene3D.Meshes()
-    let handle = required_text(meshes.add_canvas_text(
+    let handle = required_text((try meshes.add_canvas_text(
         layers[0],
         Scene3D.TextPlane(
             origin:Math.Vec3(),
             x_axis:Math.Vec3(0.01, 0.0, 0.0),
             y_axis:Math.Vec3(0.0, 0.01, 0.0)
         )
-    ))
+    )))
     assert(meshes.snapshot(handle).triangle_count() > 0)
     assert(meshes.text_cache_stats().placed_glyphs == 2)
 }
@@ -163,11 +163,11 @@ test "retain both faces when converting bundled fallback text to a 3D mesh" {
     var meshes = Scene3D.Meshes()
     let plane = Scene3D.TextPlane(origin:Math.Vec3(),
         x_axis:Math.Vec3(1.0, 0.0, 0.0), y_axis:Math.Vec3(0.0, 1.0, 0.0))
-    let handle = required_text(meshes.add_canvas_text(layer, plane))
+    let handle = required_text((try meshes.add_canvas_text(layer, plane)))
     assert(meshes.snapshot(handle).triangle_count() > 0)
     assert(meshes.text_cache_stats().placed_glyphs == 3)
     let tessellations = meshes.text_cache_stats().tessellations
-    let repeated = required_text(meshes.add_canvas_text(layer, plane))
+    let repeated = required_text((try meshes.add_canvas_text(layer, plane)))
     let before = meshes.snapshot(handle).vertices()
     let after = meshes.snapshot(repeated).vertices()
     assert(before.count() == after.count())
@@ -189,27 +189,27 @@ test "a leading fallback symbol preserves the variable face identity of followin
     var meshes = Scene3D.Meshes()
     let plane = Scene3D.TextPlane(origin:Math.Vec3(),
         x_axis:Math.Vec3(1.0, 0.0, 0.0), y_axis:Math.Vec3(0.0, 1.0, 0.0))
-    let first = required_text(meshes.add_canvas_text(thin.snapshot(96, 48).text_layers()[0], plane))
+    let first = required_text((try meshes.add_canvas_text(thin.snapshot(96, 48).text_layers()[0], plane)))
     assert(meshes.text_cache_stats().tessellations == 2)
-    let second = required_text(meshes.add_canvas_text(black.snapshot(96, 48).text_layers()[0], plane))
+    let second = required_text((try meshes.add_canvas_text(black.snapshot(96, 48).text_layers()[0], plane)))
     assert(meshes.text_cache_stats().tessellations == 3)
     assert(meshes.snapshot(first).vertices().count() > 0)
     assert(meshes.snapshot(second).vertices().count() > 0)
 }
 
 test "reject degenerate planes before creating a mesh" {
-    var face = required_face(Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf")))
-    var instance = required_instance(Font.Instance.create(face, size:1.0))
+    var face = required_face((try Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf"))))
+    var instance = required_instance((try Font.Instance.create(face, size:1.0)))
     var run = required_run(instance, "O")
     var meshes = Scene3D.Meshes()
-    match meshes.add_text(Scene3D.Text(
+    match (try meshes.add_text(Scene3D.Text(
         run,
         plane:Scene3D.TextPlane(
             origin:Math.Vec3(),
             x_axis:Math.Vec3.right(),
             y_axis:Math.Vec3.right()
         )
-    )) {
+    ))) {
         success(handle) => { panic("expected a degenerate-plane error") }
         failure(error) => {
             assert(error.detail == "Scene3D text plane axes must be non-zero and non-collinear")

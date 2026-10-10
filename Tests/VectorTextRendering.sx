@@ -35,17 +35,17 @@ func render_text(result:Result<Scene3D.MeshHandle, Scene3D.TextError>) Scene3D.M
 }
 
 func create_shadowed_text(world:&ECS.World, meshes:&Scene3D.Meshes) {
-    var face = render_face(Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf")))
-    var instance = render_instance(Font.Instance.create(face, size:1.0))
-    var run = render_run(instance.shape("OBé"))
-    let text = render_text(meshes.add_text(Scene3D.Text(
+    var face = render_face((try Font.Face.decode(embed_bytes("../../GFX.Font/Tests/Fixtures/Minimal.ttf"))))
+    var instance = render_instance((try Font.Instance.create(face, size:1.0)))
+    var run = render_run((try instance.shape("OBé")))
+    let text = render_text((try meshes.add_text(Scene3D.Text(
         run,
         plane:Scene3D.TextPlane(
             origin:Math.Vec3(-1.0, 0.0, 0.0),
             x_axis:Math.Vec3.right(),
             y_axis:Math.Vec3.up()
         )
-    )))
+    ))))
     let receiver = meshes.add(Scene3D.Geometry.Plane.make(Math.Vec2(4.0, 2.0)))
     world.spawn(ECS.EntityRecipe()
         ..with(Scene3D.Transform(position:Math.Vec3(0.0, 0.6, 4.0)))

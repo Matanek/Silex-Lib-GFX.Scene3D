@@ -69,9 +69,9 @@ test "convert analytic Canvas silhouettes into physical planar geometry" {
     var meshes = Scene3D.Meshes()
     let frame = Canvas.Rect(Math.Vec2(), Math.Vec2(64.0, 32.0))
     var snapshot = drawing.snapshot(64, 32)
-    let handle = required_canvas_geometry(meshes.add_canvas_geometry(
+    let handle = required_canvas_geometry((try meshes.add_canvas_geometry(
         snapshot, frame, mapping()
-    ))
+    )))
     let mesh = meshes.snapshot(handle)
 
     // A raw Canvas analytic circle would be two triangles. Scene3D receives
@@ -107,22 +107,22 @@ test "reuse the Scene3D text contour path inside Canvas geometry" {
     var snapshot = drawing.snapshot(64, 32)
     var layers = snapshot.text_layers()
     var meshes = Scene3D.Meshes()
-    let converted = required_canvas_geometry(meshes.add_canvas_geometry(
+    let converted = required_canvas_geometry((try meshes.add_canvas_geometry(
         snapshot,
         Canvas.Rect(Math.Vec2(), Math.Vec2(64.0, 32.0)),
         mapping()
-    ))
+    )))
     let converted_stats = meshes.text_cache_stats()
     assert(converted_stats.text_builds == 1)
     assert(converted_stats.tessellations > 0)
-    let direct = required_canvas_text(meshes.add_canvas_text(
+    let direct = required_canvas_text((try meshes.add_canvas_text(
         layers[0],
         Scene3D.TextPlane(
             origin:mapping().origin,
             x_axis:mapping().x_axis,
             y_axis:mapping().y_axis
         )
-    ))
+    )))
     let reused_stats = meshes.text_cache_stats()
     assert(reused_stats.text_builds == 2)
     assert(reused_stats.tessellations == converted_stats.tessellations)
@@ -168,11 +168,11 @@ test "reject raster-only Canvas commands and degenerate mappings explicitly" {
     })
     var meshes = Scene3D.Meshes()
     var snapshot = filtered.snapshot(32, 32)
-    match meshes.add_canvas_geometry(
+    match (try meshes.add_canvas_geometry(
         snapshot,
         Canvas.Rect(Math.Vec2(), Math.Vec2(32.0)),
         mapping()
-    ) {
+    )) {
         success(handle) => { panic("expected raster-only Canvas rejection") }
         failure(error) => {
             assert(error.detail ==
@@ -188,7 +188,7 @@ test "reject raster-only Canvas commands and degenerate mappings explicitly" {
         )
     })
     var vector_snapshot = vector.snapshot(8, 8)
-    match meshes.add_canvas_geometry(
+    match (try meshes.add_canvas_geometry(
         vector_snapshot,
         Canvas.Rect(Math.Vec2(), Math.Vec2(8.0)),
         Scene3D.PlaneMapping(
@@ -196,7 +196,7 @@ test "reject raster-only Canvas commands and degenerate mappings explicitly" {
             x_axis:Math.Vec3.right(),
             y_axis:Math.Vec3.right()
         )
-    ) {
+    )) {
         success(handle) => { panic("expected degenerate mapping rejection") }
         failure(error) => {
             assert(error.detail ==
