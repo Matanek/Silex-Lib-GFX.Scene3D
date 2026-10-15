@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `Geometry.Cylinder.make` crée un cylindre fermé configurable : normales radiales, bouchons séparés, couture UV et validation des dimensions/résolution.
+
 - Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur
   ou arrête le programme sur erreur ; `try appel()` conserve le `Result`. Les
   anciens appels stockant un résultat et propagations deviennent explicites.

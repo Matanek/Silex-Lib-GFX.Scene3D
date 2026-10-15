@@ -322,3 +322,19 @@ let tables = Tables.bundled()
 
 `Tables` est public afin qu’un renderer alternatif réutilise les transforms
 validés sans dépendre d’un payload shader privé.
+
+## Créer un cylindre
+
+`Scene3D.Geometry.Cylinder.make(radius:0.3, height:0.2, segments:24)` rend un
+maillage fermé, centré sur son axe local Y. Le rayon vaut 0,5, la hauteur 1 et
+la résolution 24 par défaut. Les dimensions sont positives et finies ; la
+résolution doit être au moins 3 et permettre des indices sur 32 bits
+(au plus 1073741822 segments, sous réserve de mémoire disponible).
+
+Les côtés ont des normales radiales lissées et une couture UV dupliquée ; les
+bouchons ont des normales Y distinctes et des UV planaires. Les triangles sont
+orientés vers l’extérieur. Construire le mesh une fois, l’ajouter à `Meshes`,
+puis partager son handle entre les instances. Une rotation de 90° autour de Z
+place son axe sur X pour une roue.
+
+[Consommateur exécutable](../../Tests/Consumer/Tests/Cylinder.sx).

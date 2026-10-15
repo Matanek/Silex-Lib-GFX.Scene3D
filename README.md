@@ -23,3 +23,5 @@ a shadow cast onto a separate receiver.
 geometry remains resolution-independent, receives a PBR material, and casts
 its silhouette—including glyph outlines—onto a separate receiver. The example
 uses neither `CanvasPanel` nor an intermediate texture.
+
+`Scene3D.Geometry.Cylinder.make` creates a closed, UV-mapped cylinder centered on local Y; see the [geometry consumer](Tests/Consumer/Tests/Cylinder.sx).

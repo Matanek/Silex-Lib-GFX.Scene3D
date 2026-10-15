@@ -401,3 +401,18 @@ let tables = Tables.bundled()
 `Tables` is public so an alternative renderer can reuse the same validated
 transforms instead of depending on a private shader payload. The generation
 script lives at `Tools/GenerateToneMappingLUTs.py`.
+
+## Create a cylinder
+
+`Scene3D.Geometry.Cylinder.make(radius:0.3, height:0.2, segments:24)` returns a
+closed mesh centered on local Y. Defaults are radius 0.5, height 1 and 24
+segments. Dimensions must be positive and finite; segment count must be at
+least 3 and fit 32-bit indices (at most 1073741822 segments, subject to available
+memory).
+
+Sides use smooth radial normals and a duplicated UV seam; caps use separate
+Y normals and planar UVs. Triangles face outward. Build the mesh once, add it
+to `Meshes`, then share its handle among instances. A 90° rotation about Z
+places its axis on X for a wheel.
+
+[Executable consumer](../../Tests/Consumer/Tests/Cylinder.sx).

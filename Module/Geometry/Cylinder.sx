@@ -1,0 +1,54 @@
+use GFX.Scene3D.Geometry.Mesh as Mesh
+use GFX.Scene3D.Geometry.Vertex as Vertex
+use STD.Math
+
+public static struct Cylinder {
+    func make(radius:float = 0.5, height:float = 1.0, segments:int = 24) Mesh {
+        if !Math.is_finite(radius) || radius<=0.0 || !Math.is_finite(height) || height<=0.0 {
+            panic("GFX.Scene3D.Geometry.Cylinder requires positive finite radius and height")
+        }
+        // Four vertices per segment and six seam/center vertices must fit uint32 indices.
+        if segments<3 || segments>1073741822 {
+            panic("GFX.Scene3D.Geometry.Cylinder segment count must be at least three and fit mesh indices")
+        }
+        let half=height*0.5
+        var vertices:Vertex[]=[]
+        var indices:uint32[]=[]
+        var i=0
+        while i<=segments {
+            let u=i as float/segments as float
+            var angle=u*Math.two_pi()
+            if i==segments { angle=0.0 }
+            let normal=Math.Vec3(Math.cos(angle),0.0,Math.sin(angle))
+            vertices.append(Vertex(Math.Vec3(radius*normal.x,-half,radius*normal.z),normal,Math.Vec2(u,1.0)))
+            vertices.append(Vertex(Math.Vec3(radius*normal.x,half,radius*normal.z),normal,Math.Vec2(u,0.0)))
+            if i<segments {
+                let b=(2*i) as uint32
+                indices.append(b);indices.append(b+1 as uint32);indices.append(b+3 as uint32)
+                indices.append(b);indices.append(b+3 as uint32);indices.append(b+2 as uint32)
+            }
+            i++
+        }
+        let sides:int[]=[-1,1]
+        for side in sides {
+            let normal=Math.Vec3(0.0,side as float,0.0)
+            let center=vertices.count() as uint32
+            vertices.append(Vertex(Math.Vec3(0.0,half*side as float,0.0),normal,Math.Vec2(0.5)))
+            i=0
+            while i<=segments {
+                var angle=i as float/segments as float*Math.two_pi()
+                if i==segments { angle=0.0 }
+                let x=Math.cos(angle);let z=Math.sin(angle)
+                vertices.append(Vertex(Math.Vec3(radius*x,half*side as float,radius*z),normal,Math.Vec2(0.5+0.5*x,0.5+0.5*z)))
+                if i<segments {
+                    let current=center+1 as uint32+i as uint32
+                    indices.append(center)
+                    if side>0 { indices.append(current+1 as uint32);indices.append(current) }
+                    else { indices.append(current);indices.append(current+1 as uint32) }
+                }
+                i++
+            }
+        }
+        return Mesh(vertices,indices)
+    }
+}

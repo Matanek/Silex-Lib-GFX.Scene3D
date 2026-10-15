@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `Geometry.Cylinder.make` creates a configurable closed cylinder with radial normals, separate caps, a UV seam and dimension/resolution validation.
+
 - Adopts one `Result` declaration: an ordinary call returns the value or
   stops the program on failure; `try call()` keeps the `Result`. Existing calls
   storing results and propagating failures are made explicit. This revision

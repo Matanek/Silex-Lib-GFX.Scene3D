@@ -1,0 +1,20 @@
+use GFX.Scene3D
+use STD.Math
+use STD.Process
+
+func main() {
+    var radius=0.5;var height=1.0;var segments=24
+    for argument in Process.arguments() {
+        if argument=="radius-zero" { radius=0.0 }
+        if argument=="radius-negative" { radius= -1.0 }
+        if argument=="radius-nan" { radius=Math.sqrt(-1.0) }
+        if argument=="radius-infinite" { radius=1.0/0.0 }
+        if argument=="height-zero" { height=0.0 }
+        if argument=="height-nan" { height=Math.sqrt(-1.0) }
+        if argument=="segments-small" { segments=2 }
+        if argument=="segments-overflow" { segments=1073741823 }
+    }
+    let mesh=Scene3D.Geometry.Cylinder.make(radius,height,segments)
+    assert(mesh.vertex_count()==102 && mesh.triangle_count()==96)
+    print("Cylinder positive geometry verified")
+}
