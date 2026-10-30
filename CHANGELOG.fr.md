@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Recalcule les bornes de visibilité des lots quand le rayon du maillage change, même à transformation inchangée ; les géométries déformables restent visibles pendant leur déplacement.
+
 - `Geometry.Cylinder.make` crée un cylindre fermé configurable : normales radiales, bouchons séparés, couture UV et validation des dimensions/résolution.
 
 - Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur

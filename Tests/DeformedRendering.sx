@@ -1,0 +1,44 @@
+use GFX.Application
+use GFX.ECS
+use GFX.Rendering
+use GFX.Scene3D
+use GFX.Window.Plugin as WindowPlugin
+use STD.Math
+
+class MovingMesh {
+    var asset:Scene3D.MeshHandle=Scene3D.MeshHandle()
+    var camera:ECS.Entity=ECS.Entity()
+    var frames:int=0
+}
+
+func setup(world:&ECS.World,meshes:&Scene3D.Meshes,state:&MovingMesh) {
+    state.asset=meshes.add(Scene3D.Geometry.Cube.make())
+    state.camera=world.spawn(ECS.EntityRecipe()
+        ..with(Scene3D.Transform(position:Math.Vec3(0.0,0.0,3.0))) ..with(Scene3D.Camera()))
+    world.spawn(ECS.EntityRecipe() ..with(Scene3D.Transform()) ..with(Scene3D.Mesh(state.asset))
+        ..with(Scene3D.Material()) ..with(Scene3D.MaterialSettings(unlit:true)))
+}
+
+func inspect(world:&ECS.World,meshes:&Scene3D.Meshes,state:&MovingMesh,
+    renderer:@Rendering.Renderer,controller:&Application.Controller) {
+    assert(renderer.stats().color_instances()==1)
+    state.frames++
+    if state.frames==4 { controller.stop();return }
+    var offset=32.0
+    if state.frames==2 { offset=0.0 }
+    if state.frames==3 { offset= -32.0 }
+    meshes.replace(state.asset,Scene3D.Geometry.Cube.make().translated(Math.Vec3(offset,0.0,0.0)))
+    world.update<Scene3D.Transform>(state.camera,func(transform:&Scene3D.Transform) {
+        transform.position=Math.Vec3(offset,0.0,3.0)
+    })
+}
+
+test "keep a replaced world-space mesh visible far from its unchanged identity model" {
+    var application=Application() ..add_resource(MovingMesh())
+        ..add_plugin(WindowPlugin(WindowPlugin.Settings() ..title="Scene3D deformed mesh visibility"
+            ..width=64 ..height=64 ..hidden=true))
+        ..add_plugin(Scene3D.Plugin())
+        ..add_system(Application.Schedule.startup,setup)
+        ..add_after_system(Application.Schedule.render,inspect)
+    assert(application.run()==0)
+}

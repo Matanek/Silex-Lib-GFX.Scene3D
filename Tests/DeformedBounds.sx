@@ -1,0 +1,33 @@
+use GFX.Scene3D.Batches
+use GFX.Scene3D.Material
+use STD.Math
+
+func batch() Batches.Batch {
+    let draw=Batches.Draw(cache:0,model:Math.Mat4.identity(),instance_cache:0,
+        instance_identity:0,instance_revision:0,instance_parent:Math.Mat4.identity(),
+        material:Material(),settings:Batches.DrawSettings(),distance:0.0,
+        textures:Material.MaterialTextures(),panel_surface:null,position:Math.Vec3())
+    var result=Batches.Batch(draw,0)
+    result.models.append(Math.Mat4.identity())
+    return result
+}
+
+test "refresh visibility bounds when geometry changes without model motion" {
+    var item=batch()
+    item.refresh_bounds(1.2)
+    assert(Math.abs(item.radius-1.2)<0.00001)
+    item.models_changed=false
+    // A world-space deforming mesh travels away from its identity model.
+    item.refresh_bounds(32.0)
+    assert(Math.abs(item.radius-32.0)<0.00001)
+    assert(item.center.nearly_equal(Math.Vec3(),0.00001))
+    // Returning and shrinking must invalidate just as growing does.
+    item.refresh_bounds(1.2)
+    assert(Math.abs(item.radius-1.2)<0.00001)
+    item.refresh_bounds(1.2)
+    assert(Math.abs(item.radius-1.2)<0.00001)
+    item.models_changed=true
+    item.models[0]=Math.Mat4.translation(Math.Vec3(0.0,0.0,8.0))
+    item.refresh_bounds(1.2)
+    assert(item.center.nearly_equal(Math.Vec3(0.0,0.0,8.0),0.00001))
+}

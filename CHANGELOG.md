@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Refresh batch visibility bounds when the mesh radius changes, even with unchanged transforms, keeping deforming world-space geometry visible as it travels.
+
 - `Geometry.Cylinder.make` creates a configurable closed cylinder with radial normals, separate caps, a UV seam and dimension/resolution validation.
 
 - Adopts one `Result` declaration: an ordinary call returns the value or

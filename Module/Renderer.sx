@@ -995,9 +995,7 @@ package class Renderer {
         var index = 0
         while index < self.active_batches {
             var batch = self.batches[index]
-            if batch.models_changed {
-                batch.rebuild_bounds(self.meshes[batch.cache].local_radius)
-            }
+            batch.refresh_bounds(self.meshes[batch.cache].local_radius)
             index++
         }
     }

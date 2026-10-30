@@ -112,6 +112,7 @@ package class Batch {
     var chunks:SpatialChunk[]
     var active_chunks:int
     var chunk_local_radius:float
+    var bounds_local_radius:float
     var source_identity:int
     var source_revision:int
     var source_parent:Math.Mat4
@@ -130,6 +131,7 @@ package class Batch {
         self.chunks = []
         self.active_chunks = 0
         self.chunk_local_radius = -1.0
+        self.bounds_local_radius = -1.0
         self.source_identity = draw.instance_identity
         self.source_revision = draw.instance_revision
         self.source_parent = draw.instance_parent
@@ -188,6 +190,13 @@ package class Batch {
         let bounds = model_bounds(self.models, local_radius)
         self.center = bounds.center
         self.radius = bounds.radius
+    }
+
+    func refresh_bounds(local_radius:float) {
+        if self.models_changed || self.bounds_local_radius != local_radius {
+            self.rebuild_bounds(local_radius)
+            self.bounds_local_radius = local_radius
+        }
     }
 
     func rebuild_chunks(local_radius:float) {
