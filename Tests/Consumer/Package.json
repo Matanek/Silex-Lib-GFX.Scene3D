@@ -1,10 +1,10 @@
 {
   "sources": "Tests",
   "dependencies": {
-    "GFX": "^0.37.0",
-    "GFX.Canvas": "^0.1.0",
-    "GFX.ECS": "^0.1.0",
-    "GFX.Scene3D": "^0.1.0",
-    "STD": "^0.16.0"
+    "GFX": "^0.41.0",
+    "GFX.Canvas": "^0.5.0",
+    "GFX.ECS": "^0.3.0",
+    "GFX.Scene3D": "^0.4.0",
+    "STD": "^0.23.0"
   }
 }

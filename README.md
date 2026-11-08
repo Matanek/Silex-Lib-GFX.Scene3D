@@ -12,7 +12,7 @@ silex install GFX.Scene3D
 - [French documentation](Docs/FR/README.md)
 - [English documentation](Docs/EN/README.md)
 
-The package requires Silex 0.43.0 or newer.
+The package requires Silex 0.48.0 or newer.
 
 The public `Silex-Examples/Sources/VectorFontShowcase/Main.sx` demonstration
 shows a `GlyphRun` converted into lit planar geometry, with a PBR material and
