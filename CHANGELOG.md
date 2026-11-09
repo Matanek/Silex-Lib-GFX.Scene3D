@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - 2026-11-08
+## [0.4.0] - 2026-11-09
 
 - Refresh batch visibility bounds when the mesh radius changes, even with unchanged transforms, keeping deforming world-space geometry visible as it travels.
 

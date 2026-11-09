@@ -1,6 +1,6 @@
 # Historique
 
-## [0.4.0] - 2026-11-08
+## [0.4.0] - 2026-11-09
 
 - Recalcule les bornes de visibilité des lots quand le rayon du maillage change, même à transformation inchangée ; les géométries déformables restent visibles pendant leur déplacement.
 
